@@ -1,5 +1,6 @@
 from enum import Enum
 import argparse
+import socket
 
 class client :
 
@@ -17,51 +18,104 @@ class client :
 
     # ******************** METHODS *******************
     @staticmethod
-    def register(user):
+    def register(user: str):
+        # START CONNECTION
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                try:
+                    s.connect((client._server, client._port))
+
+                    # SEND REQUEST
+                    s.sendall("REGISTER".encode())  # REGISTER ...
+                    s.sendall(f"{user}".encode())  # ... user
+
+                    # RECEIVE RESPONSE
+                    try:
+                        responses = []
+                        responses.append(s.recv(1).decode())  # 1 byte buffer
+                        responses.append(s.recv(1).decode())  # 1 byte buffer
+                    except socket.error:
+                        print("REGISTER FAIL")
+                        return client.RC.ERROR
+                except ConnectionRefusedError:
+                    print("REGISTER FAIL")
+                    return client.RC.ERROR
+        except socket.error:
+            print("REGISTER FAIL")
+            return client.RC.ERROR
+        
+        # END CONNECTION
+        try:
+            s.close()
+        except UnboundLocalError:
+            print("REGISTER FAIL")
+            return client.RC.ERROR
+        
+        # CHECK RESPONSE
+        if all(response == '1' for response in responses):
+            print("USERNAME IN USE")
+            return client.RC.USER_ERROR
+        elif all(response == '2' for response in responses):
+            print("REGISTER FAIL")
+            return client.RC.ERROR
+        else:
+            print("REGISTER OK")
+            return client.RC.OK
+
+    @staticmethod
+    def unregister(user: str):
+        # SEND REQUEST
+        # RECEIVE RESPONSE
+        # CLOSE CONNECTION
+        return client.RC.ERROR
+    
+    @staticmethod
+    def connect(user):
         # SEND REQUEST 
         # RECEIVE RESPONSE
         # CLOSE CONNECTION
         return client.RC.ERROR
 
     @staticmethod
-    def unregister(user):
-        # SEND REQUEST
-        #  Write your code here
-        return client.RC.ERROR
-    
-    @staticmethod
-    def connect(user):
-        #  Write your code here
-        return client.RC.ERROR
-
-    @staticmethod
     def disconnect(user):
-        #  Write your code here
+        # SEND REQUEST 
+        # RECEIVE RESPONSE
+        # CLOSE CONNECTION
         return client.RC.ERROR
 
     @staticmethod
     def publish(fileName,  description):
-        #  Write your code here
+        # SEND REQUEST 
+        # RECEIVE RESPONSE
+        # CLOSE CONNECTION
         return client.RC.ERROR
 
     @staticmethod
     def delete(fileName):
-        #  Write your code here
+        # SEND REQUEST 
+        # RECEIVE RESPONSE
+        # CLOSE CONNECTION
         return client.RC.ERROR
 
     @staticmethod
     def listusers():
-        #  Write your code here
+        # SEND REQUEST 
+        # RECEIVE RESPONSE
+        # CLOSE CONNECTION
         return client.RC.ERROR
 
     @staticmethod
     def listcontent(user):
-        #  Write your code here
+        # SEND REQUEST 
+        # RECEIVE RESPONSE
+        # CLOSE CONNECTION
         return client.RC.ERROR
 
     @staticmethod
     def getfile(user,  remote_FileName,  local_FileName):
-        #  Write your code here
+        # SEND REQUEST 
+        # RECEIVE RESPONSE
+        # CLOSE CONNECTION
         return client.RC.ERROR
 
     # *
@@ -152,7 +206,7 @@ class client :
     # *
     # * @brief Parses program execution arguments
     @staticmethod
-    def  parseArguments(argv) :
+    def parseArguments(argv) :
         parser = argparse.ArgumentParser()
         parser.add_argument('-s', type=str, required=True, help='Server IP')
         parser.add_argument('-p', type=int, required=True, help='Server Port')
@@ -163,11 +217,11 @@ class client :
             return False
 
         if ((args.p < 1024) or (args.p > 65535)):
-            parser.error("Error: Port must be in the range 1024 <= port <= 65535");
-            return False;
+            parser.error("Error: Port must be in the range 1024 <= port <= 65535")
+            return False
         
-        _server = args.s
-        _port = args.p
+        client._server = args.s
+        client._port = args.p
 
         return True
 
