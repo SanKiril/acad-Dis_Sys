@@ -144,7 +144,6 @@ class client:
             return client.RC.ERROR
 
         # SEARCH FREE VALID PORT
-
         ServerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         # START CLIENT-SERVER CONNECTION
