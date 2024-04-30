@@ -2,6 +2,10 @@ from enum import Enum
 import argparse
 import socket
 import threading
+import json
+import os
+import errno
+import io
 
 
 # messages size in bytes
@@ -13,10 +17,15 @@ FILENAME_SIZE = 256
 DESCRIPTION_SIZE = 256
 IP_ADDRESS_SIZE = 16
 PORT_SIZE = 6
+CLIENT_CONNECTIONS = 1
 
 
 class client:
-
+    def __init__(self):
+        self.__username = ""
+        self.__server_socket = None
+        self.__server_thread = None
+    
     # ******************** TYPES *********************
     # *
     # * @brief Return codes for the protocol methods
@@ -30,185 +39,210 @@ class client:
     _port = -1
 
     # ******************** METHODS *******************
-    @staticmethod
-    def register(username: str) -> int:
+    def register(self, username: str) -> int:
         # INPUT VALIDATION
-        if len(username) > USERNAME_SIZE:
+        if " " in username or len(username) > USERNAME_SIZE:
             print("REGISTER FAIL")
             return client.RC.ERROR
 
-        # START CLIENT-SERVER CONNECTION
+        # CLIENT-SERVER CONNECTION
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ClientSocket:
-                try:
-                    ClientSocket.connect((client._server, client._port))
-                except ConnectionRefusedError:
-                    print("REGISTER FAIL")
-                    ClientSocket.close()
-                    return client.RC.ERROR
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+                client_socket.connect((client._server, client._port))
 
                 # SEND REQUEST TO SERVER
-                try:
-                    ClientSocket.sendall("REGISTER".encode())  # REGISTER ...
-                    ClientSocket.sendall(f"{username}".encode())  # ... <username>
-                except socket.error:
-                    print("REGISTER FAIL")
-                    ClientSocket.close()
-                    return client.RC.ERROR
+                client_socket.sendall("REGISTER\0".encode())  # REGISTER ...
+                client_socket.sendall(f"{username}\0".encode())  # ... <username>
 
                 # RECEIVE RESPONSE FROM SERVER
-                try:
-                    response = ClientSocket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
-                except socket.error:
+                response = client_socket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
+                
+                # CHECK RESPONSE FROM SERVER
+                if response == '0':
+                    print("REGISTER OK")
+                    self.__username = username
+                    return client.RC.OK
+                elif response == '1':
+                    print("USERNAME IN USE")
+                    return client.RC.USER_ERROR
+                else:
                     print("REGISTER FAIL")
-                    ClientSocket.close()
                     return client.RC.ERROR
-        except socket.error:
+        except (socket.error, ConnectionRefusedError):
             print("REGISTER FAIL")
             return client.RC.ERROR
-        
-        # CHECK RESPONSE FROM SERVER
-        if response == '0':
-            print("REGISTER OK")
-            retval = client.RC.OK
-        elif response == '1':
-            print("USERNAME IN USE")
-            retval = client.RC.USER_ERROR
-        else:
-            print("REGISTER FAIL")
-            retval = client.RC.ERROR
-        
-        # END CLIENT-SERVER CONNECTION
-        ClientSocket.close()
-        
-        return retval
 
-    @staticmethod
-    def unregister(username: str) -> int:
+    def unregister(self, username: str) -> int:
         # INPUT VALIDATION
-        if len(username) > USERNAME_SIZE:
+        if " " in username or len(username) > USERNAME_SIZE:
             print("UNREGISTER FAIL")
             return client.RC.ERROR
 
-        # START CLIENT-SERVER CONNECTION
+        # CLIENT-SERVER CONNECTION
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ClientSocket:
-                try:
-                    ClientSocket.connect((client._server, client._port))
-                except ConnectionRefusedError:
-                    print("UNREGISTER FAIL")
-                    ClientSocket.close()
-                    return client.RC.ERROR
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+                client_socket.connect((client._server, client._port))
 
                 # SEND REQUEST TO SERVER
-                try:
-                    ClientSocket.sendall("UNREGISTER".encode())  # UNREGISTER ...
-                    ClientSocket.sendall(f"{username}".encode())  # ... <username>
-                except socket.error:
-                    print("UNREGISTER FAIL")
-                    ClientSocket.close()
-                    return client.RC.ERROR
+                client_socket.sendall("UNREGISTER\0".encode())  # UNREGISTER ...
+                client_socket.sendall(f"{username}\0".encode())  # ... <username>
 
                 # RECEIVE RESPONSE FROM SERVER
-                try:
-                    response = ClientSocket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
-                except socket.error:
+                response = client_socket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
+                
+                # CHECK RESPONSE FROM SERVER
+                if response == '0':
+                    print("UNREGISTER OK")
+                    self.__username = ""
+                    return client.RC.OK
+                elif response == '1':
+                    print("USER DOES NOT EXIST")
+                    return client.RC.USER_ERROR
+                else:
                     print("UNREGISTER FAIL")
-                    ClientSocket.close()
                     return client.RC.ERROR
-        except socket.error:
+        except (socket.error, ConnectionRefusedError):
             print("UNREGISTER FAIL")
             return client.RC.ERROR
-        
-        # CHECK RESPONSE FROM SERVER
-        if response == '0':
-            print("UNREGISTER OK")
-            retval = client.RC.OK
-        elif response == '1':
-            print("USER DOES NOT EXIST")
-            retval = client.RC.USER_ERROR
-        else:
-            print("UNREGISTER FAIL")
-            retval = client.RC.ERROR
-        
-        # END CLIENT-SERVER CONNECTION
-        ClientSocket.close()
-
-        return retval
     
-    @staticmethod
-    def connect(username: str) -> int:
+    def __share_file(self) -> int:
+        try:
+            self.__server_socket.listen(CLIENT_CONNECTIONS)  # connections at a time
+            while self.__server_socket is not None and self.__server_thread is not None:
+                try:
+                    client_socket = self.__server_socket.accept()[0]
+                    with client_socket:
+                        if client_socket.recv(9).decode().rstrip('\0') == "GET_FILE":  # GET_FILE ...
+                            filename = client_socket.recv(FILENAME_SIZE).decode().rstrip('\0')  # ... Filename
+                            try:
+                                # SEND FILE TO CLIENT
+                                with open(filename, "rb") as file:
+                                    client_socket.sendall(b"\x00")  # "0"
+                                    while True:
+                                        data = file.read(io.DEFAULT_BUFFER_SIZE)
+                                        if not data:
+                                            break
+                                        client_socket.sendall(data)
+                                return client.RC.OK
+                            except (FileNotFoundError, IOError):
+                                client_socket.sendall(b"\x01")  # "1"
+                                return client.RC.USER_ERROR
+                        else:
+                            client_socket.sendall(b"\x02")  # "2"
+                            return client.RC.ERROR
+                except socket.error as e:
+                    if e.errno == errno.EINTR:  # Interrupted system call
+                        self.__server_thread.join()
+                        self.__server_thread = None
+                        return client.RC.ERROR
+                    elif e.errno == errno.EWOULDBLOCK:  # Resource temporarily unavailable
+                        continue
+                    else:
+                        return client.RC.ERROR
+        except (socket.error):
+            return client.RC.ERROR
+    
+    def connect(self, username: str) -> int:
         # INPUT VALIDATION
-        if len(username) > USERNAME_SIZE:
+        if " " in username or len(username) > USERNAME_SIZE:
             print("CONNECT FAIL")
             return client.RC.ERROR
 
-        # SEARCH FREE VALID PORT
-        ServerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # CLIENT-CLIENT CONNECTION
+        if self.__server_socket is None:
+            try:
+                self.__server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.__server_socket.setblocking(False)  # non-blocking socket
 
-        # START CLIENT-SERVER CONNECTION
+                # FIND FREE PORT
+                self.__server_socket.bind(("localhost", 0))  # OS assigns a free port
+                port = self.__server_socket.getsockname()[1]
+
+                # CREATE THREAD TO LISTEN FOR REQUESTS
+                self.__server_thread = threading.Thread(target=self.__share_file)
+                self.__server_thread.start()
+            except (socket.error):
+                print("CONNECT FAIL")
+                return client.RC.ERROR
+
+        # CLIENT-SERVER CONNECTION
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ClientSocket:
-                try:
-                    ClientSocket.connect((client._server, client._port))
-                except ConnectionRefusedError:
-                    print("CONNECT FAIL")
-                    ClientSocket.close()
-                    return client.RC.ERROR
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+                client_socket.connect((client._server, client._port))
 
                 # SEND REQUEST TO SERVER
-                try:
-                    ClientSocket.sendall("CONNECT".encode())  # CONNECT ...
-                    ClientSocket.sendall(f"{username}".encode())  # ... <username> ...
-                    ClientSocket.sendall(f"{port}".encode())  # ... <port>
-                except socket.error:
-                    print("CONNECT FAIL")
-                    ClientSocket.close()
-                    return client.RC.ERROR
+                client_socket.sendall("CONNECT\0".encode())  # CONNECT ...
+                client_socket.sendall(f"{username}\0".encode())  # ... <username> ...
+                client_socket.sendall(f"{port}\0".encode())  # ... Port
 
                 # RECEIVE RESPONSE FROM SERVER
-                try:
-                    response = ClientSocket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
-                except socket.error:
+                response = client_socket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
+                
+                # CHECK RESPONSE
+                if response == '0':
+                    print("CONNECT OK")
+                    return client.RC.OK
+                elif response == '1':
+                    print("CONNECT FAIL, USER DOES NOT EXIST")
+                    return client.RC.USER_ERROR
+                elif response == '2':
+                    print("CONNECT FAIL, USER ALREADY CONNECTED")
+                    return client.RC.USER_ERROR
+                else:
                     print("CONNECT FAIL")
-                    ClientSocket.close()
                     return client.RC.ERROR
-        except socket.error:
+        except (socket.error, ConnectionRefusedError):
             print("CONNECT FAIL")
             return client.RC.ERROR
-        
-        # CHECK RESPONSE
-        if response == '0':
-            print("CONNECT OK")
-            retval = client.RC.OK
-        elif response == '1':
-            print("CONNECT FAIL, USER DOES NOT EXIST")
-            retval = client.RC.USER_ERROR
-        elif response == '2':
-            print("USER ALREADY CONNECTED")
-            retval = client.RC.USER_ERROR
-        else:
-            print("CONNECT FAIL")
-            retval = client.RC.ERROR
-        
-        # END CLIENT-SERVER CONNECTION
-        ClientSocket.close()
 
-        return retval
-
-    @staticmethod
-    def disconnect(user) -> int:
-        # SEND REQUEST 
-        # RECEIVE RESPONSE
-        # CLOSE CONNECTION
-        return client.RC.ERROR
-
-    @staticmethod
-    def publish(username: str, filename: str, description: str) -> int:
+    def disconnect(self, username: str) -> int:
         # INPUT VALIDATION
-        if len(username) > USERNAME_SIZE:
-            print("PUBLISH FAIL")
+        if " " in username or len(username) > USERNAME_SIZE:
+            print("DISCONNECT FAIL")
             return client.RC.ERROR
+
+        # CLIENT-CLIENT CONNECTION
+        if self.__server_socket is not None:
+            try:
+                self.__server_socket.close()
+                self.__server_socket = None
+                self.__server_thread.join()
+                self.__server_thread = None
+            except (socket.error):
+                print("DISCONNECT FAIL")
+                return client.RC.ERROR
+
+        # CLIENT-SERVER CONNECTION
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+                client_socket.connect((client._server, client._port))
+
+                # SEND REQUEST TO SERVER
+                client_socket.sendall("DISCONNECT\0".encode())  # DISCONNECT ...
+                client_socket.sendall(f"{username}\0".encode())  # ... <username>
+
+                # RECEIVE RESPONSE FROM SERVER
+                response = client_socket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
+                
+                # CHECK RESPONSE
+                if response == '0':
+                    print("DISCONNECT OK")
+                    return client.RC.OK
+                elif response == '1':
+                    print("DISCONNECT FAIL, USER DOES NOT EXIST")
+                    return client.RC.USER_ERROR
+                elif response == '2':
+                    print("DISCONNECT FAIL, USER NOT CONNECTED")
+                    return client.RC.USER_ERROR
+                else:
+                    print("DISCONNECT FAIL")
+                    return client.RC.ERROR
+        except (socket.error, ConnectionRefusedError):
+            print("DISCONNECT FAIL")
+            return client.RC.ERROR
+
+    def publish(self, filename: str, description: str) -> int:
+        # INPUT VALIDATION
         if " " in filename or len(filename) > FILENAME_SIZE:
             print("PUBLISH FAIL")
             return client.RC.ERROR
@@ -216,285 +250,247 @@ class client:
             print("PUBLISH FAIL")
             return client.RC.ERROR
 
-        # START CLIENT-SERVER CONNECTION
+        # CLIENT-SERVER CONNECTION
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ClientSocket:
-                try:
-                    ClientSocket.connect((client._server, client._port))
-                except ConnectionRefusedError:
-                    print("PUBLISH FAIL")
-                    ClientSocket.close()
-                    return client.RC.ERROR
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+                client_socket.connect((client._server, client._port))
 
                 # SEND REQUEST TO SERVER
-                try:
-                    ClientSocket.sendall("PUBLISH".encode())  # PUBLISH ...
-                    ClientSocket.sendall(f"{username}".encode())  # ... <username> ...
-                    ClientSocket.sendall(f"{filename}".encode())  # ... <filename> ...
-                    ClientSocket.sendall(f"{description}".encode())  # ... <description>
-                except socket.error:
-                    print("PUBLISH FAIL")
-                    ClientSocket.close()
-                    return client.RC.ERROR
+                client_socket.sendall("PUBLISH\0".encode())  # PUBLISH ...
+                client_socket.sendall(f"{self.__username}\0".encode())  # ... Username ...
+                client_socket.sendall(f"{filename}\0".encode())  # ... <filename> ...
+                client_socket.sendall(f"{description}\0".encode())  # ... <description>
 
                 # RECEIVE RESPONSE FROM SERVER
-                try:
-                    response = ClientSocket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
-                except socket.error:
+                response = client_socket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
+
+                # CHECK RESPONSE FROM SERVER
+                if response == '0':
+                    print("PUBLISH OK")
+                    return client.RC.OK
+                elif response == '1':
+                    print("PUBLISH FAIL, USER DOES NOT EXIST")
+                    return client.RC.USER_ERROR
+                elif response == '2':
+                    print("PUBLISH FAIL, USER NOT CONNECTED")
+                    return client.RC.USER_ERROR
+                elif response == '3':
+                    print("PUBLISH FAIL, CONTENT ALREADY PUBLISHED")
+                    return client.RC.USER_ERROR
+                else:
                     print("PUBLISH FAIL")
-                    ClientSocket.close()
                     return client.RC.ERROR
-        except socket.error:
+        except (socket.error, ConnectionRefusedError):
             print("PUBLISH FAIL")
             return client.RC.ERROR
-        
-        # CHECK RESPONSE FROM SERVER
-        if response == '0':
-            print("PUBLISH OK")
-            retval = client.RC.OK
-        elif response == '1':
-            print("PUBLISH FAIL, USER DOES NOT EXIST")
-            retval = client.RC.USER_ERROR
-        elif response == '2':
-            print("PUBLISH FAIL, USER NOT CONNECTED")
-            retval = client.RC.USER_ERROR
-        elif response == '3':
-            print("PUBLISH FAIL, CONTENT ALREADY PUBLISHED")
-            retval = client.RC.USER_ERROR
-        else:
-            print("PUBLISH FAIL")
-            retval = client.RC.ERROR
-        
-        # END CLIENT-SERVER CONNECTION
-        ClientSocket.close()
 
-        return retval
-
-    @staticmethod
-    def delete(username: str, filename: str) -> int:
+    def delete(self, filename: str) -> int:
         # INPUT VALIDATION
-        if len(username) > USERNAME_SIZE:
-            print("DELETE FAIL")
-            return client.RC.ERROR
         if " " in filename or len(filename) > FILENAME_SIZE:
             print("DELETE FAIL")
             return client.RC.ERROR
 
-        # START CLIENT-SERVER CONNECTION
+        # CLIENT-SERVER CONNECTION
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ClientSocket:
-                try:
-                    ClientSocket.connect((client._server, client._port))
-                except ConnectionRefusedError:
-                    print("DELETE FAIL")
-                    ClientSocket.close()
-                    return client.RC.ERROR
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+                client_socket.connect((client._server, client._port))
 
                 # SEND REQUEST TO SERVER
-                try:
-                    ClientSocket.sendall("DELETE".encode())  # DELETE ...
-                    ClientSocket.sendall(f"{username}".encode())  # ... <username> ...
-                    ClientSocket.sendall(f"{filename}".encode())  # ... <filename>
-                except socket.error:
-                    print("DELETE FAIL")
-                    ClientSocket.close()
-                    return client.RC.ERROR
+                client_socket.sendall("DELETE\0".encode())  # DELETE ...
+                client_socket.sendall(f"{self.__username}\0".encode())  # ... Username ...
+                client_socket.sendall(f"{filename}\0".encode())  # ... <filename>
 
                 # RECEIVE RESPONSE FROM SERVER
                 try:
-                    response = ClientSocket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
+                    response = client_socket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
                 except socket.error:
                     print("DELETE FAIL")
-                    ClientSocket.close()
+                    client_socket.close()
                     return client.RC.ERROR
-        except socket.error:
+                
+                # CHECK RESPONSE FROM SERVER
+                if response == '0':
+                    print("DELETE OK")
+                    return client.RC.OK
+                elif response == '1':
+                    print("DELETE FAIL, USER DOES NOT EXIST")
+                    return client.RC.USER_ERROR
+                elif response == '2':
+                    print("DELETE FAIL, USER NOT CONNECTED")
+                    return client.RC.USER_ERROR
+                elif response == '3':
+                    print("DELETE FAIL, CONTENT NOT PUBLISHED")
+                    return client.RC.USER_ERROR
+                else:
+                    print("DELETE FAIL")
+                    return client.RC.ERROR
+        except (socket.error, ConnectionRefusedError):
             print("DELETE FAIL")
             return client.RC.ERROR
-        
-        # CHECK RESPONSE FROM SERVER
-        if response == '0':
-            print("DELETE OK")
-            retval = client.RC.OK
-        elif response == '1':
-            print("DELETE FAIL, USER DOES NOT EXIST")
-            retval = client.RC.USER_ERROR
-        elif response == '2':
-            print("DELETE FAIL, USER NOT CONNECTED")
-            retval = client.RC.USER_ERROR
-        elif response == '3':
-            print("DELETE FAIL, CONTENT NOT PUBLISHED")
-            retval = client.RC.USER_ERROR
-        else:
-            print("DELETE FAIL")
-            retval = client.RC.ERROR
-        
-        # END CLIENT-SERVER CONNECTION
-        ClientSocket.close()
 
-        return retval
-
-    @staticmethod
-    def listusers(username: str) -> int:
-        # INPUT VALIDATION
-        if len(username) > USERNAME_SIZE:
-            print("LIST_USERS FAIL")
-            return client.RC.ERROR
-
-        # START CLIENT-SERVER CONNECTION
+    def listusers(self) -> int:
+        # CLIENT-SERVER CONNECTION
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ClientSocket:
-                try:
-                    ClientSocket.connect((client._server, client._port))
-                except ConnectionRefusedError:
-                    print("LIST_USERS FAIL")
-                    ClientSocket.close()
-                    return client.RC.ERROR
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+                client_socket.connect((client._server, client._port))
 
                 # SEND REQUEST TO SERVER
-                try:
-                    ClientSocket.sendall("LIST_USERS".encode())  # LIST_USERS ...
-                    ClientSocket.sendall(f"{username}".encode())  # ... <username>
-                except socket.error:
-                    print("LIST_USERS FAIL")
-                    ClientSocket.close()
-                    return client.RC.ERROR
+                client_socket.sendall("LIST_USERS\0".encode())  # LIST_USERS ...
+                client_socket.sendall(f"{self.__username}\0".encode())  # ... Username
 
                 # RECEIVE RESPONSE FROM SERVER
-                try:
-                    response = ClientSocket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
-                except socket.error:
+                response = client_socket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
+
+                # CHECK RESPONSE FROM SERVER
+                if response == '0':
+                    # GET LIST OF USERS
+                    users_list = []
+                    output = "LIST_USERS OK\n"
+                    number_users = int.from_bytes(client_socket.recv(NUMBER_USERS_SIZE), byteorder='big', signed=False)  # Number of users
+                    for _ in range(number_users):
+                        user_info = {
+                            "Username": client_socket.recv(USERNAME_SIZE).decode().rstrip('\0'),  # Username
+                            "IP address": client_socket.recv(IP_ADDRESS_SIZE).decode().rstrip('\0'),  # IP address
+                            "Port": client_socket.recv(PORT_SIZE).decode().rstrip('\0')   # Port
+                        }
+                        users_list.append(user_info)
+                        output += f"{user_info['username']} {user_info['ip_address']} {user_info['port']}\n"
+                    
+                    # SAVE LIST OF USERS TO FILE
+                    with open(f"listusers-{self.__username}.json", "w") as file:
+                        json.dump(users_list, file, indent=4)
+
+                    print(output)
+                    return client.RC.OK
+                if response == '1':
+                    print("LIST_USERS FAIL, USER DOES NOT EXIST")
+                    return client.RC.USER_ERROR
+                elif response == '2':
+                    print("LIST_USERS FAIL, USER NOT CONNECTED")
+                    return client.RC.USER_ERROR
+                else:
                     print("LIST_USERS FAIL")
-                    ClientSocket.close()
                     return client.RC.ERROR
-        except socket.error:
+        except (socket.error, ConnectionRefusedError, ValueError):
             print("LIST_USERS FAIL")
             return client.RC.ERROR
-        
-        # CHECK RESPONSE FROM SERVER
-        if response == '0':
-            output = "LIST_USERS OK\n"
-            try:
-                number_users = int(ClientSocket.recv(NUMBER_USERS_SIZE).decode())    # Number of users
 
-                for _ in range(number_users):
-                    user_info = [
-                        ClientSocket.recv(USERNAME_SIZE).decode(),  # Username
-                        ClientSocket.recv(IP_ADDRESS_SIZE).decode(),  # IP address
-                        ClientSocket.recv(PORT_SIZE).decode()   # Port
-                    ]
-                    output += f"{user_info[0]} {user_info[1]} {user_info[2]}\n"
-
-                print(output)
-                retval = client.RC.OK
-            except (socket.error, ValueError):
-                print("LIST_USERS FAIL")
-                ClientSocket.close()
-                return client.RC.ERROR
-        if response == '1':
-            print("LIST_USERS FAIL, USER DOES NOT EXIST")
-            retval = client.RC.USER_ERROR
-        elif response == '2':
-            print("LIST_USERS FAIL, USER NOT CONNECTED")
-            retval = client.RC.USER_ERROR
-        else:
-            print("LIST_USERS FAIL")
-            retval = client.RC.ERROR
-        
-        # END CLIENT-SERVER CONNECTION
-        ClientSocket.close()
-
-        return retval
-
-    @staticmethod
-    def listcontent(username: str, remote_username: str) -> int:
+    def listcontent(self, username: str) -> int:
         # INPUT VALIDATION
-        if len(username) > USERNAME_SIZE:
-            print("LIST_CONTENT FAIL")
-            return client.RC.ERROR
-        if len(remote_username) > USERNAME_SIZE:
+        if " " in username or len(username) > USERNAME_SIZE:
             print("LIST_CONTENT FAIL")
             return client.RC.ERROR
 
-        # START CLIENT-SERVER CONNECTION
+        # CLIENT-SERVER CONNECTION
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ClientSocket:
-                try:
-                    ClientSocket.connect((client._server, client._port))
-                except ConnectionRefusedError:
-                    print("LIST_CONTENT FAIL")
-                    ClientSocket.close()
-                    return client.RC.ERROR
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+                client_socket.connect((client._server, client._port))
 
                 # SEND REQUEST TO SERVER
-                try:
-                    ClientSocket.sendall("LIST_CONTENT".encode())  # LIST_CONTENT ...
-                    ClientSocket.sendall(f"{username}".encode())  # ... <username> ...
-                    ClientSocket.sendall(f"{remote_username}".encode())  # ... <remote_username>
-                except socket.error:
-                    print("LIST_CONTENT FAIL")
-                    ClientSocket.close()
-                    return client.RC.ERROR
+                client_socket.sendall("LIST_CONTENT\0".encode())  # LIST_CONTENT ...
+                client_socket.sendall(f"{self.__username}\0".encode())  # ... Username ...
+                client_socket.sendall(f"{username}\0".encode())  # ... <username>
 
                 # RECEIVE RESPONSE FROM SERVER
-                try:
-                    response = ClientSocket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
-                except socket.error:
+                response = client_socket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
+
+                # CHECK RESPONSE FROM SERVER
+                if response == '0':
+                    # GET LIST OF CONTENTS
+                    output = "LIST_CONTENT OK\n"
+                    number_files = int.from_bytes(client_socket.recv(NUMBER_FILES_SIZE), byteorder='big', signed=False)  # Number of files
+                    for _ in range(number_files):
+                        file_info = {
+                            "Filename": client_socket.recv(FILENAME_SIZE).decode().rstrip('\0'),  # Filename
+                            "Description": client_socket.recv(DESCRIPTION_SIZE).decode().rstrip('\0'),  # Description
+                        }
+                        output += f"{file_info['Filename']} \"{file_info['Description']}\"\n"
+
+                    print(output)
+                    return client.RC.OK
+                if response == '1':
+                    print("LIST_CONTENT FAIL, USER DOES NOT EXIST")
+                    return client.RC.USER_ERROR
+                elif response == '2':
+                    print("LIST_CONTENT FAIL, USER NOT CONNECTED")
+                    return client.RC.USER_ERROR
+                elif response == '3':
+                    print("LIST_CONTENT FAIL, REMOTE USER DOES NOT EXIST")
+                    return client.RC.USER_ERROR
+                else:
                     print("LIST_CONTENT FAIL")
-                    ClientSocket.close()
                     return client.RC.ERROR
-        except socket.error:
+        except (socket.error, ConnectionRefusedError, ValueError):
             print("LIST_CONTENT FAIL")
             return client.RC.ERROR
+
+    def getfile(self, username: str, remote_filename: str, local_filename: str) -> int:
+        # INPUT VALIDATION
+        if " " in username or len(username) > USERNAME_SIZE:
+            print("GET_FILE FAIL")
+            return client.RC.ERROR
+        if " " in remote_filename or len(remote_filename) > FILENAME_SIZE:
+            print("GET_FILE FAIL")
+            return client.RC.ERROR
+        if " " in local_filename or len(local_filename) > FILENAME_SIZE:
+            print("GET_FILE FAIL")
+            return client.RC.ERROR
         
-        # CHECK RESPONSE FROM SERVER
-        if response == '0':
-            output = "LIST_CONTENT OK\n"
-            try:
-                number_files = int(ClientSocket.recv(NUMBER_FILES_SIZE).decode())    # Number of files
+        # GET REMOTE USER INFO
+        try:
+            with open(f"listusers-{self.__username}.json", 'r') as file:
+                users_list = json.load(file)
+                user_info = users_list.get(username)
+                if user_info is None:
+                    print("GET_FILE FAIL")
+                    return client.RC.ERROR
+        except (FileNotFoundError, json.JSONDecodeError):
+            print("GET_FILE FAIL")
+            return client.RC.ERROR
 
-                for _ in range(number_files):
-                    file_info = [
-                        ClientSocket.recv(FILENAME_SIZE).decode(),  # Filename
-                        ClientSocket.recv(DESCRIPTION_SIZE).decode(),  # Description
-                    ]
-                    output += f"{file_info[0]} \"{file_info[1]}\"\n"
+        # CLIENT-CLIENT CONNECTION
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+                client_socket.connect((user_info["IP address"], user_info["Port"]))
 
-                print(output)
-                retval = client.RC.OK
-            except (socket.error, ValueError):
-                print("LIST_CONTENT FAIL")
-                ClientSocket.close()
-                return client.RC.ERROR
-        if response == '1':
-            print("LIST_CONTENT FAIL, USER DOES NOT EXIST")
-            retval = client.RC.USER_ERROR
-        elif response == '2':
-            print("LIST_CONTENT FAIL, USER NOT CONNECTED")
-            retval = client.RC.USER_ERROR
-        elif response == '3':
-            print("LIST_CONTENT FAIL, REMOTE USER DOES NOT EXIST")
-            retval = client.RC.USER_ERROR
-        else:
-            print("LIST_CONTENT FAIL")
-            retval = client.RC.ERROR
-        
-        # END CLIENT-SERVER CONNECTION
-        ClientSocket.close()
+                # SEND REQUEST TO CLIENT
+                client_socket.sendall("GET_FILE\0".encode())  # LIST_CONTENT ...
+                client_socket.sendall(f"{remote_filename}\0".encode())  # ... <remote_filename>
 
-        return retval
+                # RECEIVE RESPONSE FROM CLIENT
+                response = client_socket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
 
-    @staticmethod
-    def getfile(username: str, remote_filename: str, local_filename: str) -> int:
-        # SEND REQUEST 
-        # RECEIVE RESPONSE
-        # CLOSE CONNECTION
-        return client.RC.ERROR
+                # CHECK RESPONSE FROM CLIENT
+                if response == '0':
+                    try:
+                        # WRITE TO LOCAL FILE FROM REMOTE FILE
+                        with open(local_filename, "wb") as file:
+                            while True:
+                                data = client_socket.recv(io.DEFAULT_BUFFER_SIZE)  # content from remote file
+                                if not data:
+                                    break
+                                file.write(data)
+
+                        print("GET_FILE OK")
+                        return client.RC.OK
+                    except (socket.error, IOError):
+                        print("GET_FILE FAIL")
+                        os.remove(local_filename)  # remove local file
+                        return client.RC.ERROR
+                if response == '1':
+                    print("GET_FILE FAIL, FILE DOES NOT EXIST")
+                    return client.RC.USER_ERROR
+                else:
+                    print("GET_FILE FAIL")
+                    return client.RC.ERROR
+        except (socket.error, ConnectionRefusedError):
+            print("GET_FILE FAIL")
+            return client.RC.ERROR
 
     # *
     # **
     # * @brief Command interpreter for the client. It calls the protocol functions.
-    @staticmethod
-    def shell():
+    def shell(self):
         while (True):
             try:
                 command = input("c> ")
@@ -505,62 +501,68 @@ class client:
 
                     if (line[0]=="REGISTER"):
                         if (len(line) == 2):
-                            client.register(line[1])
+                            self.register(line[1])
                         else:
                             print("Syntax error. Usage: REGISTER <username>")
 
                     elif(line[0]=="UNREGISTER"):
                         if (len(line) == 2):
-                            client.unregister(line[1])
+                            self.unregister(line[1])
                         else:
                             print("Syntax error. Usage: UNREGISTER <username>")
 
                     elif(line[0]=="CONNECT"):
                         if (len(line) == 2):
-                            client.connect(line[1])
+                            self.connect(line[1])
                         else:
                             print("Syntax error. Usage: CONNECT <username>")
                     
                     elif(line[0]=="PUBLISH"):
-                        if (len(line) == 4):
-                            #  Remove first 3 words
-                            description = ' '.join(line[3:])
-                            client.publish(line[1], line[2], description)
+                        if (len(line) == 3):
+                            #  Remove first 2 words
+                            description = ' '.join(line[2:])
+                            self.publish(line[1], description)
                         else:
-                            print("Syntax error. Usage: PUBLISH <username> <filename> <description>")
+                            print("Syntax error. Usage: PUBLISH <filename> <description>")
 
                     elif(line[0]=="DELETE"):
-                        if (len(line) == 3):
-                            client.delete(line[1], line[2])
+                        if (len(line) == 2):
+                            self.delete(line[1])
                         else:
-                            print("Syntax error. Usage: DELETE <username> <filename>")
+                            print("Syntax error. Usage: DELETE <filename>")
 
                     elif(line[0]=="LIST_USERS"):
-                        if (len(line) == 2):
-                            client.listusers(line[1])
+                        if (len(line) == 1):
+                            self.listusers()
                         else:
-                            print("Syntax error. Usage: LIST_USERS <username>")
+                            print("Syntax error. Usage: LIST_USERS")
 
                     elif(line[0]=="LIST_CONTENT"):
-                        if (len(line) == 3):
-                            client.listcontent(line[1], line[2])
+                        if (len(line) == 2):
+                            self.listcontent(line[1])
                         else:
-                            print("Syntax error. Usage: LIST_CONTENT <username> <remote_username>")
+                            print("Syntax error. Usage: LIST_CONTENT <username>")
 
                     elif(line[0]=="DISCONNECT"):
                         if (len(line) == 2):
-                            client.disconnect(line[1])
+                            self.disconnect(line[1])
                         else:
                             print("Syntax error. Usage: DISCONNECT <username>")
 
                     elif(line[0]=="GET_FILE"):
                         if (len(line) == 4):
-                            client.getfile(line[1], line[2], line[3])
+                            self.getfile(line[1], line[2], line[3])
                         else:
                             print("Syntax error. Usage: GET_FILE <username> <remote_filename> <local_filename>")
 
                     elif(line[0]=="QUIT"):
                         if (len(line) == 1):
+                            # CLIENT-CLIENT CONNECTION
+                            if self.__server_socket is not None:
+                                self.__server_socket.close()
+                                self.__server_socket = None
+                                self.__server_thread.join()
+                                self.__server_thread = None
                             break
                         else:
                             print("Syntax error. Usage: QUIT")
@@ -598,16 +600,15 @@ class client:
         return True
 
     # ******************** MAIN *********************
-    @staticmethod
-    def main(argv):
+    def main(self, argv):
         if (not client.parseArguments(argv)):
             client.usage()
             return
 
         #  Write code here
-        client.shell()
+        self.shell()
         print("+++ FINISHED +++")
     
 
 if __name__=="__main__":
-    client.main([])
+    client().main([])
