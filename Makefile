@@ -23,4 +23,5 @@ devtools.o: devtools.c  # temporary
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(SERVER_OBJECT) $(SERVER)
+	@rm -f *.csv
+	@rm -f $(SERVER_OBJECT) $(SERVER)
