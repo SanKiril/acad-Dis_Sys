@@ -92,7 +92,7 @@ struct local_ip_info get_local_ip() {
 * @return 1 if exists, 0 otherwise
 * @return -1 if error
 */
-int check_username_existence(char *username) {
+int check_username_existence(char username[USERNAME_SIZE]) {
     // open users.csv file
     pthread_mutex_lock(&users_file_lock);
     FILE *users_file = fopen(users_filename, "r");
@@ -126,7 +126,7 @@ int check_username_existence(char *username) {
 * @return 1 if exists, 0 otherwise
 * @return -1 if error
 */
-int check_username_file_existance(char *username) {
+int check_username_file_existance(char username[USERNAME_SIZE]) {
     // open files folder
     pthread_mutex_lock(&files_folder_lock);
     DIR *dir = opendir(files_foldername);
@@ -159,7 +159,7 @@ int check_username_file_existance(char *username) {
 * @return 1 if connected, 0 otherwise
 * @return -1 if error
 */
-int check_user_connection(char *username) {
+int check_user_connection(char username[USERNAME_SIZE]) {
     // open connected file
     pthread_mutex_lock(&connected_file_lock);
     FILE *connected_file = fopen(connected_filename, "r");
@@ -194,7 +194,7 @@ int check_user_connection(char *username) {
 * @return 1 if disconnected, 0 otherwise
 * @return -1 if error
 */
-int disconnect_user(char *username) {
+int disconnect_user(char username[USERNAME_SIZE]) {
     // check if user is connected
     int check_user_connection_rvalue = check_user_connection(username);
     if (check_user_connection_rvalue == 0) {
@@ -236,7 +236,7 @@ int disconnect_user(char *username) {
 * @return 1 if username already exists
 * @return -1 if error
 */
-int register_user(char *username) {
+int register_user(char username[USERNAME_SIZE]) {
     // check if username exists in users.csv
     int check_username_existence_rvalue = check_username_existence(username);
     if (check_username_existence_rvalue == 1) {
@@ -302,7 +302,7 @@ int handle_register(int client_socket) {
 * @return 1 if username doesn't exist
 * @return -1 if error
 */
-int unregister_user(char *username) {
+int unregister_user(char username[USERNAME_SIZE]) {
     // check if username exists
     int check_username_existence_rvalue = check_username_existence(username);
     if (check_username_existence_rvalue == 0) {
@@ -377,6 +377,136 @@ int handle_unregister(int client_socket) {
     } else {
         write(client_socket, "0", EXECUTION_STATUS_SIZE);
     }
+    printf("OPERATION FROM %s\n", username);
+    return 0;
+}
+
+/**
+* @brief check if filename exists in username.csv
+* @param username username
+* @param filename filename
+* @return -1 if error
+* @return 1 if filename exists
+* @return 0 if filename doesn't exist
+*/
+int check_file_existance(char username[USERNAME_SIZE], char filename[FILENAME_SIZE]) {
+    // open username.csv
+    char *username_filename = malloc(strlen(files_foldername) + strlen(username) + 2);
+    asprintf(&username_filename, "%s%s", files_foldername, username);
+    pthread_mutex_lock(&files_folder_lock);
+    FILE *username_file = fopen(username_filename, "r");
+    free(username_filename);
+    if (username_file == NULL) {
+        pthread_mutex_unlock(&files_folder_lock);
+        perror("fopen");
+        return -1;
+    }
+
+    // check if filename is in any line in username.csv
+    const long MAXLINE = 4096;
+    char line[MAXLINE];
+    while (fgets(line, MAXLINE, username_file) != NULL) {
+        char *possible_filename = strtok(line, ";");
+        if (strcmp(possible_filename, filename) == 0) {
+            // filename exists
+            fclose(username_file);
+            pthread_mutex_unlock(&files_folder_lock);
+            return 1;
+        }
+    }
+
+    // filename doesn't exist
+    fclose(username_file);
+    pthread_mutex_unlock(&files_folder_lock);
+    return 0;
+}
+
+/**
+* @brief publish file to username.csv
+* @param username username
+* @param filename filename
+* @param description description
+*/
+int publish_file(char username[USERNAME_SIZE], char filename[FILENAME_SIZE], char description[DESCRIPTION_SIZE]) {
+    // check if user is registered
+    int check_username_existence_rvalue = check_username_existence(username);
+    if (check_username_existence_rvalue == 0) {
+        return 1;
+    } else if (check_username_existence_rvalue < 0) {
+        return -1;
+    }
+
+    // check if user is connected
+    int check_user_connection_rvalue = check_user_connection(username);
+    if (check_user_connection_rvalue == 0) {
+        return 2;
+    } else if (check_user_connection_rvalue < 0) {
+        return -1;
+    }
+    
+    // check if file has been published by user
+    int check_file_existance_rvalue = check_file_existance(username, filename);
+    if (check_file_existance_rvalue == 1) {
+        return 3;
+    } else if (check_file_existance_rvalue < 0) {
+        return -1;
+    }
+
+    // open username.csv
+    char *username_filename = malloc(strlen(files_foldername) + strlen(username) + 2);
+    asprintf(&username_filename, "%s%s", files_foldername, username);
+    pthread_mutex_lock(&files_folder_lock);
+    FILE *username_file = fopen(username_filename, "a");
+    free(username_filename);
+    if (username_file == NULL) {
+        pthread_mutex_unlock(&files_folder_lock);
+        perror("fopen");
+        return -1;
+    }
+
+    // write filename;description at the end of the file
+    fprintf(username_file, "%s;%s\n", filename, description);
+    fclose(username_file);
+    pthread_mutex_unlock(&files_folder_lock);
+
+    return 0;
+}
+
+int handle_publish(int client_socket) {
+    // get username from client socket
+    char username[USERNAME_SIZE];
+    if (read(client_socket, username, USERNAME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+
+    // get filename from client socket
+    char filename[FILENAME_SIZE];
+    if (read(client_socket, filename, FILENAME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+
+    // get description from client socket
+    char description[DESCRIPTION_SIZE];
+    if (read(client_socket, description, DESCRIPTION_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+
+    // attempt to publish file
+    int publish_file_rvalue = publish_file(username, filename, description);
+    
+    // send error code to client
+    if (publish_file_rvalue < 0) {
+        // in case there was an error
+        write(client_socket, "4", EXECUTION_STATUS_SIZE);
+        return -1;
+    } else {
+        // if there was no error, send execution status
+        write(client_socket, (char *)&publish_file_rvalue, EXECUTION_STATUS_SIZE);
+    }
+
     printf("OPERATION FROM %s\n", username);
     return 0;
 }

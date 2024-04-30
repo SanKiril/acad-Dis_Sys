@@ -13,6 +13,10 @@ all:
 	@make -s $(SERVER)
 	echo "Compiled server"
 
+test:
+	@make -s all
+	@make -s clean
+
 $(SERVER): $(SERVER_OBJECT)
 	$(CC) $(CFLAGS) -o $@ $^
 
