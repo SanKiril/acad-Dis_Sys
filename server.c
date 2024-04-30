@@ -24,6 +24,7 @@
 #define PORT_SIZE 6
 
 const char *users_filename = "users.csv";
+const char *connected_filename = "connected.csv";
 const char *files_foldername = "files/";
 const char *files_filename = "files.csv";
 pthread_mutex_t users_file_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -184,6 +185,31 @@ int check_username_folder_existence(char *username) {
     return 0;
 }
 
+int check_user_connection(char *username) {
+    // open connected file
+    FILE *connected_file = fopen(connected_filename, "r");
+    if (connected_file == NULL) {
+        perror("fopen");
+        return -1;
+    }
+
+    // go line by line, checking if the line's username matches the username
+    const long MAXLINE = 4096;
+    char line[MAXLINE];
+    while (fgets(line, MAXLINE, connected_file) != NULL) {
+        char *possible_username = strtok(line, ";");
+        if (strcmp(possible_username, username) == 0) {
+            // username exists
+            fclose(connected_file);
+            return 1;
+        }
+    }
+
+    // username doesn't exist
+    fclose(connected_file);
+    return 0;
+}
+
 /**
 * @brief register user, adding it to users.csv file
 * @param username username to register
@@ -267,8 +293,10 @@ int handle_register(int client_socket) {
     free(user_folder);
 
     // create files.csv inside user folder
-    char *user_files_filename = malloc(strlen(user_folder) + strlen(files_filename) + 2);
-    strcpy(user_files_filename, user_folder);
+    char *user_files_filename = malloc(strlen(files_foldername) + strlen(username) + strlen(files_filename) + 2);
+    strcpy(user_files_filename, files_foldername);
+    strcat(user_files_filename, username);
+    strcat(user_files_filename, "/");
     strcat(user_files_filename, files_filename);
     FILE *files_file = fopen(user_files_filename, "w");
     free(user_files_filename);
@@ -344,6 +372,12 @@ int unregister_user(char *username) {
     return 0;
 }
 
+/**
+* @brief unregister operation handler. Calls unregister_user() and sends error code to client
+* @param client_socket socket of client
+* @return 0 if successful
+* @return -1 if error
+*/
 int handle_unregister(int client_socket) {
     // get username from client socket
     char username[USERNAME_SIZE];
@@ -442,6 +476,11 @@ int handle_publish(int client_socket) {
 
     // add filename to files.csv
     fclose(files_info);
+    files_info_file = malloc(strlen(files_foldername) + strlen(username) + strlen(files_filename) + 3);
+    strcpy(files_info_file, files_foldername);
+    strcat(files_info_file, username);
+    strcat(files_info_file, "/");
+    strcat(files_info_file, files_filename);
     FILE *files_file = fopen(files_info_file, "a");
     if (files_file == NULL) {
         write(client_socket, "4", EXECUTION_STATUS_SIZE);
@@ -525,7 +564,7 @@ int main(int argc, char* argv[]) {
 
     // check given port's validity
     unsigned int port_number = check_arguments(argc, argv);
-    if (port_number < 1024 | port_number > 65535) {
+    if ((port_number < 1024) | (port_number > 65535)) {
         fprintf(stderr, "Invalid port: '%s'\n", argv[2]);
         exit(1);
     }

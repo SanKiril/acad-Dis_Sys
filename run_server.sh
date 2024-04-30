@@ -1,6 +1,5 @@
 #!/bin/bash
 
-rm -f server
 clear
-gcc -o server server.c devtools.c
+make
 ./server -p 5000
