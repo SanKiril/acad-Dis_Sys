@@ -10,8 +10,9 @@ SERVER = server
 # Define all rules
 all:
 	@make -s clean
+	@clear
 	@make -s $(SERVER)
-	echo "Compiled server"
+	@echo "Compiled server"
 
 test:
 	@make -s all

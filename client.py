@@ -6,6 +6,7 @@ import json
 import os
 import errno
 import io
+from time import sleep
 
 
 # messages size in bytes
@@ -52,6 +53,7 @@ class client:
 
                 # SEND REQUEST TO SERVER
                 client_socket.sendall("REGISTER\0".encode())  # REGISTER ...
+                sleep(0.1)
                 client_socket.sendall(f"{username}\0".encode())  # ... <username>
 
                 # RECEIVE RESPONSE FROM SERVER
@@ -85,6 +87,7 @@ class client:
 
                 # SEND REQUEST TO SERVER
                 client_socket.sendall("UNREGISTER\0".encode())  # UNREGISTER ...
+                sleep(0.1)
                 client_socket.sendall(f"{username}\0".encode())  # ... <username>
 
                 # RECEIVE RESPONSE FROM SERVER
@@ -164,6 +167,9 @@ class client:
             except (socket.error):
                 print("CONNECT FAIL")
                 return client.RC.ERROR
+        else:
+            port = self.__server_socket.getsockname()[1]
+
 
         # CLIENT-SERVER CONNECTION
         try:
@@ -172,7 +178,9 @@ class client:
 
                 # SEND REQUEST TO SERVER
                 client_socket.sendall("CONNECT\0".encode())  # CONNECT ...
+                sleep(0.1)
                 client_socket.sendall(f"{username}\0".encode())  # ... <username> ...
+                sleep(0.1)
                 client_socket.sendall(f"{port}\0".encode())  # ... Port
 
                 # RECEIVE RESPONSE FROM SERVER
@@ -189,7 +197,7 @@ class client:
                     print("CONNECT FAIL, USER ALREADY CONNECTED")
                     return client.RC.USER_ERROR
                 else:
-                    print("CONNECT FAIL")
+                    print(f"CONNECT FAIL ({response})")
                     return client.RC.ERROR
         except (socket.error, ConnectionRefusedError):
             print("CONNECT FAIL")
@@ -219,6 +227,7 @@ class client:
 
                 # SEND REQUEST TO SERVER
                 client_socket.sendall("DISCONNECT\0".encode())  # DISCONNECT ...
+                sleep(0.1)
                 client_socket.sendall(f"{username}\0".encode())  # ... <username>
 
                 # RECEIVE RESPONSE FROM SERVER
@@ -257,8 +266,11 @@ class client:
 
                 # SEND REQUEST TO SERVER
                 client_socket.sendall("PUBLISH\0".encode())  # PUBLISH ...
+                sleep(0.1)
                 client_socket.sendall(f"{self.__username}\0".encode())  # ... Username ...
+                sleep(0.1)
                 client_socket.sendall(f"{filename}\0".encode())  # ... <filename> ...
+                sleep(0.1)
                 client_socket.sendall(f"{description}\0".encode())  # ... <description>
 
                 # RECEIVE RESPONSE FROM SERVER
@@ -297,7 +309,9 @@ class client:
 
                 # SEND REQUEST TO SERVER
                 client_socket.sendall("DELETE\0".encode())  # DELETE ...
+                sleep(0.1)
                 client_socket.sendall(f"{self.__username}\0".encode())  # ... Username ...
+                sleep(0.1)
                 client_socket.sendall(f"{filename}\0".encode())  # ... <filename>
 
                 # RECEIVE RESPONSE FROM SERVER
@@ -336,6 +350,7 @@ class client:
 
                 # SEND REQUEST TO SERVER
                 client_socket.sendall("LIST_USERS\0".encode())  # LIST_USERS ...
+                sleep(0.1)
                 client_socket.sendall(f"{self.__username}\0".encode())  # ... Username
 
                 # RECEIVE RESPONSE FROM SERVER
@@ -388,7 +403,9 @@ class client:
 
                 # SEND REQUEST TO SERVER
                 client_socket.sendall("LIST_CONTENT\0".encode())  # LIST_CONTENT ...
+                sleep(0.1)
                 client_socket.sendall(f"{self.__username}\0".encode())  # ... Username ...
+                sleep(0.1)
                 client_socket.sendall(f"{username}\0".encode())  # ... <username>
 
                 # RECEIVE RESPONSE FROM SERVER
@@ -455,6 +472,7 @@ class client:
 
                 # SEND REQUEST TO CLIENT
                 client_socket.sendall("GET_FILE\0".encode())  # LIST_CONTENT ...
+                sleep(0.1)
                 client_socket.sendall(f"{remote_filename}\0".encode())  # ... <remote_filename>
 
                 # RECEIVE RESPONSE FROM CLIENT
