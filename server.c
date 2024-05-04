@@ -260,7 +260,7 @@ int handle_register(int client_socket) {
 }
 
 /**
-* @brief disconnect user, deleting it from connected.csv file
+* @brief disconnect user, deleting it from connected.csv file and deleting username from files folder
 * @param username username to disconnect
 * @return 0 if successful
 * @return 1 if user doesn't exist
@@ -361,7 +361,7 @@ int handle_disconnect(int client_socket) {
 }
 
 /**
-* @brief unregister user, deleting it from users.csv file and deleting its folder
+* @brief unregister user, deleting it from users.csv file and disconnecting them if they are connected
 * @param username username to unregister
 * @return 0 if successful
 * @return 1 if username doesn't exist
@@ -452,7 +452,7 @@ int handle_unregister(int client_socket) {
 }
 
 /**
-* @brief check if filename exists in username
+* @brief check if filename exists in username file in files folder
 * @param username username
 * @param filename filename
 * @return -1 if error
@@ -492,7 +492,7 @@ int check_published_file_existance(char username[USERNAME_SIZE], char filename[F
 }
 
 /**
-* @brief publish file to username
+* @brief publish file, adding it to the username file in files folder
 * @param username username
 * @param filename filename
 * @param description description
@@ -596,7 +596,7 @@ int handle_publish(int client_socket) {
 }
 
 /**
-* @brief connect operation handler. Calls connect_user() and sends error code to client
+* @brief adds username, ip and port to connected.csv and creates username file in files folder
 * @param client_socket socket of client
 * @return 0 if successful
 * @return 1 if user doesn't exist
@@ -712,7 +712,7 @@ int handle_connect(int client_socket) {
 }
 
 /**
-* @brief delete operation handler. Calls delete_file() and sends error code to client
+* @brief deletes a file from the username
 * @param client_socket socket of client
 * @return 0 if successful
 * @return 1 if user doesn't exist
@@ -841,6 +841,12 @@ struct user {
     char port[PORT_SIZE];
 };
 
+/**
+* @brief gets all users in connected.csv and sends their info to the client
+* @param client_socket socket of client
+* @return 0 if successful
+* @return -1 if error
+*/
 int list_users(int client_socket) {
     // get username from client
     char username[USERNAME_SIZE];
@@ -917,6 +923,104 @@ int list_users(int client_socket) {
     return 0;
 }
 
+struct file {
+    char filename[FILENAME_SIZE];
+    char description[DESCRIPTION_SIZE];
+};
+
+int list_content(int client_socket) {
+    // get username from client
+    char username[USERNAME_SIZE];
+    if (read(client_socket, username, USERNAME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+
+    // get requested username from client
+    char requested_username[USERNAME_SIZE];
+    if (read(client_socket, requested_username, USERNAME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+
+    // check if username exists
+    int check_username_existence_rvalue = check_username_existence(username);
+    if (check_username_existence_rvalue == 0) {
+        write(client_socket, "1", EXECUTION_STATUS_SIZE);
+        return 0;
+    } else if (check_username_existence_rvalue < 0) {
+        write(client_socket, "3", EXECUTION_STATUS_SIZE);
+        return -1;
+    }
+
+    // check if user is connected
+    int check_user_connection_rvalue = check_user_connection(username);
+    if (check_user_connection_rvalue == 0) {
+        write(client_socket, "2", EXECUTION_STATUS_SIZE);
+        return 0;
+    } else if (check_user_connection_rvalue < 0) {
+        write(client_socket, "3", EXECUTION_STATUS_SIZE);
+        return -1;
+    }
+
+    // check if requested username is connected
+    int check_requested_user_connection_rvalue = check_user_connection(requested_username);
+    if (check_requested_user_connection_rvalue == 0) {
+        write(client_socket, "2", EXECUTION_STATUS_SIZE);
+        return 0;
+    } else if (check_requested_user_connection_rvalue < 0) {
+        write(client_socket, "3", EXECUTION_STATUS_SIZE);
+        return -1;
+    }
+
+    write(client_socket, "0", EXECUTION_STATUS_SIZE);
+
+    // open username files in files folder
+    char *username_filename = malloc(strlen(files_foldername) + strlen(requested_username) + 2);
+    asprintf(&username_filename, "%s%s", files_foldername, requested_username);
+    pthread_mutex_lock(&files_folder_lock);
+    FILE *username_file = fopen(username_filename, "r");
+    free(username_filename);
+    if (username_file == NULL) {
+        perror("fopen");
+        return -1;
+    }
+
+    // get files from username file
+    struct file filelist[100];
+    int filenum = 0;
+    int MAXLINE = 4096;
+    char line[MAXLINE];
+    while (fgets(line, MAXLINE, username_file) != 0) {
+        if ((strcmp(line, "\n") == 0) || (strcmp(line, "") == 0)) {
+            break;
+        }
+        strcpy(filelist[filenum].filename, strtok(line, ";"));
+        strcpy(filelist[filenum].description, strtok(NULL, ";"));
+        filenum++;
+    }
+
+    fclose(username_file);
+    pthread_mutex_unlock(&files_folder_lock);
+
+    // send filenum to client
+    char *filenum_str;
+    asprintf(&filenum_str, "%d", filenum);
+    sleep(0.1);
+    write(client_socket, filenum_str, strlen(filenum_str));
+
+    // send filelist to client
+    for (int i = 0; i < filenum; i++) {
+        sleep(0.1);
+        write(client_socket, filelist[i].filename, FILENAME_SIZE);
+        sleep(0.1);
+        write(client_socket, filelist[i].description, DESCRIPTION_SIZE);
+    }
+
+    printf("OPERATION FROM %s\n", username);
+    return 0;
+}
+
 /**
 * @brief thread function to handle petition from client, calling the specific handler
 * @param client_socket client socket
@@ -961,6 +1065,10 @@ void petition_handler(void *client_socket) {
         }
     } else if (strcmp(operation, "LIST_USERS") == 0) {
         if (list_users(socket) < 0) {
+            pthread_exit(NULL);
+        }
+    } else if (strcmp(operation, "LIST_CONTENT") == 0) {
+        if (list_content(socket) < 0) {
             pthread_exit(NULL);
         }
     }

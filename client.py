@@ -367,10 +367,10 @@ class client:
                         user_info = {
                             "Username": client_socket.recv(USERNAME_SIZE).decode().rstrip('\0'),  # Username
                             "IP address": client_socket.recv(IP_ADDRESS_SIZE).decode().rstrip('\0'),  # IP address
-                            "Port": client_socket.recv(PORT_SIZE).decode().rstrip('\0')   # Port
+                            "Port": client_socket.recv(PORT_SIZE).decode().rstrip('\0\n')   # Port
                         }
                         users_list.append(user_info)
-                        output += f"{user_info['username']} {user_info['ip_address']} {user_info['port']}\n"
+                        output += f"{user_info['Username']} {user_info['IP address']} {user_info['Port']}\n"
                     
                     # SAVE LIST OF USERS TO FILE
                     with open(f"listusers-{self.__username}.json", "w") as file:
@@ -416,11 +416,11 @@ class client:
                 if response == '0':
                     # GET LIST OF CONTENTS
                     output = "LIST_CONTENT OK\n"
-                    number_files = int.from_bytes(client_socket.recv(NUMBER_FILES_SIZE), byteorder='big', signed=False)  # Number of files
+                    number_files = int(client_socket.recv(NUMBER_USERS_SIZE).decode())  # Number of files
                     for _ in range(number_files):
                         file_info = {
-                            "Filename": client_socket.recv(FILENAME_SIZE).decode().rstrip('\0'),  # Filename
-                            "Description": client_socket.recv(DESCRIPTION_SIZE).decode().rstrip('\0'),  # Description
+                            "Filename": client_socket.recv(FILENAME_SIZE).decode().rstrip('\0\n'),  # Filename
+                            "Description": client_socket.recv(DESCRIPTION_SIZE).decode().rstrip('\0\n'),  # Description
                         }
                         output += f"{file_info['Filename']} \"{file_info['Description']}\"\n"
 
