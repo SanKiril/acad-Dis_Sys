@@ -259,6 +259,14 @@ int handle_register(int client_socket) {
     return 0;
 }
 
+/**
+* @brief disconnect user, deleting it from connected.csv file
+* @param username username to disconnect
+* @return 0 if successful
+* @return 1 if user doesn't exist
+* @return 2 if user is not connected
+* @return -1 if error
+*/
 int disconnect_user(char username[USERNAME_SIZE]) {
     // check is user exists
     int check_username_existence_rvalue = check_username_existence(username);
@@ -292,8 +300,10 @@ int disconnect_user(char username[USERNAME_SIZE]) {
         perror("fopen");
         return -1;
     }
+    char modified_line[MAXLINE];
     while (fgets(line, MAXLINE, connected_file) != 0) {
-        char *possible_username = strtok(line, ";");
+        strcpy(modified_line, line);
+        char *possible_username = strtok(modified_line, ";");
         if (strcmp(possible_username, username) != 0) {  // if user is not the line's username, write line into temp_file
             fprintf(temp_connected_file, "%s", line);
         }
@@ -315,6 +325,12 @@ int disconnect_user(char username[USERNAME_SIZE]) {
     return 0;
 }
 
+/**
+* @brief disconnect operation handler. Calls disconnect_user() and sends error code to client
+* @param client_socket socket of client
+* @return 0 if successful
+* @return -1 if error
+*/
 int handle_disconnect(int client_socket) {
     // get username from client socket
     char username[USERNAME_SIZE];
@@ -563,6 +579,9 @@ int handle_publish(int client_socket) {
     } else if (publish_file_rvalue == 2) {
         // in case user is not connected
         write(client_socket, "2", EXECUTION_STATUS_SIZE);
+    } else if (publish_file_rvalue == 3) {
+        // in case file has already been published
+        write(client_socket, "3", EXECUTION_STATUS_SIZE);
     } else {
         write(client_socket, "0", EXECUTION_STATUS_SIZE);
     }
@@ -571,6 +590,14 @@ int handle_publish(int client_socket) {
     return 0;
 }
 
+/**
+* @brief connect operation handler. Calls connect_user() and sends error code to client
+* @param client_socket socket of client
+* @return 0 if successful
+* @return 1 if user doesn't exist
+* @return 2 if user is already connected
+* @return -1 if error
+*/
 int connect_user(char username[USERNAME_SIZE], char ip[IP_ADDRESS_SIZE], char port[PORT_SIZE]) {
     // check if user is registered
     int check_username_existence_rvalue = check_username_existence(username);
@@ -617,6 +644,12 @@ int connect_user(char username[USERNAME_SIZE], char ip[IP_ADDRESS_SIZE], char po
     return 0;
 }
 
+/**
+* @brief connect operation handler. Calls connect_user() and sends error code to client
+* @param client_socket socket of client
+* @return 0 if successful
+* @return -1 if error
+*/
 int handle_connect(int client_socket) {
     // get username from client socket
     char username[USERNAME_SIZE];
@@ -674,6 +707,123 @@ int handle_connect(int client_socket) {
 }
 
 /**
+* @brief delete operation handler. Calls delete_file() and sends error code to client
+* @param client_socket socket of client
+* @return 0 if successful
+* @return 1 if user doesn't exist
+* @return 2 if user is not connected
+* @return 3 if the file has not been published by user
+* @return -1 if error
+*/
+int delete(char username[USERNAME_SIZE], char filename[FILENAME_SIZE]) {
+    // check if user exists
+    int check_username_existence_rvalue = check_username_existence(username);
+    if (check_username_existence_rvalue == 0) {
+        return 1;
+    } else if (check_username_existence_rvalue < 0) {
+        return -1;
+    }
+
+    // check if user is connected
+    int check_user_connection_rvalue = check_user_connection(username);
+    if (check_user_connection_rvalue == 0) {
+        return 2;
+    } else if (check_user_connection_rvalue < 0) {
+        return -1;
+    }
+
+    // check if the files has been published by user
+    int check_published_file_existance_rvalue = check_published_file_existance(username, filename);
+    if (check_published_file_existance_rvalue == 0) {
+        return 3;
+    } else if (check_published_file_existance_rvalue < 0) {
+        return -1;
+    }
+
+    // remove the file from the user file
+    // open the user file in files
+    char *username_filename = malloc(strlen(files_foldername) + strlen(username) + 2);
+    asprintf(&username_filename, "%s%s", files_foldername, username);
+    pthread_mutex_lock(&files_folder_lock);
+    FILE *username_file = fopen(username_filename, "r");
+    if (username_file == NULL) {
+        pthread_mutex_unlock(&files_folder_lock);
+        perror("fopen");
+        return -1;
+    }
+
+    // temp file to edit user file
+    char *temp_file = malloc(strlen(files_foldername) + strlen(username) + strlen(filename) + 3);
+    asprintf(&temp_file, "%s%s_%s", files_foldername, username, filename);
+    FILE *temp_username_file = fopen(temp_file, "w");
+    if (temp_username_file == NULL) {
+        pthread_mutex_unlock(&files_folder_lock);
+        perror("fopen");
+        return -1;
+    }
+
+    // go line by line in username file and check if the line contains the filename
+    const long MAXLINE = 4096;
+    char line[MAXLINE];
+    char modified_line[MAXLINE];
+    while (fgets(line, MAXLINE, username_file) != NULL) {
+        strcpy(modified_line, line);
+        char *possible_filename = strtok(modified_line, ";");
+        if (strcmp(possible_filename, filename) != 0) {  // if line doesn't containt the filename, write it into the temp file
+            fprintf(temp_username_file, "%s", line);
+        }
+    }
+
+    fclose(temp_username_file);
+    fclose(username_file);
+    remove(username_filename);
+    rename(temp_file, username_filename);
+    free(temp_file);
+    free(username_filename);
+
+    pthread_mutex_unlock(&files_folder_lock);
+    
+    return 0;
+}
+
+int handle_delete(int client_socket) {
+    // get username from client
+    char username[USERNAME_SIZE];
+    if (read(client_socket, username, USERNAME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+
+    // get filename from client
+    char filename[FILENAME_SIZE];
+    if (read(client_socket, filename, FILENAME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+
+    // delete the file and send error code to client
+    int delete_rvalue = delete(username, filename);
+    if (delete_rvalue < 0) {
+        write(client_socket, "4", EXECUTION_STATUS_SIZE);
+        return -1;
+    } else if (delete_rvalue == 1) {
+        // in case username doesn't exist
+        write(client_socket, "1", EXECUTION_STATUS_SIZE);
+    } else if (delete_rvalue == 2) {
+        // in case user is not connected
+        write(client_socket, "2", EXECUTION_STATUS_SIZE);
+    } else if (delete_rvalue == 3) {
+        // in case file has not been published by user
+        write(client_socket, "3", EXECUTION_STATUS_SIZE);
+    } else {
+        write(client_socket, "0", EXECUTION_STATUS_SIZE);
+    }
+
+    printf("OPERATION FROM %s\n", username);
+    return 0;
+}
+
+/**
 * @brief thread function to handle petition from client, calling the specific handler
 * @param client_socket client socket
 */
@@ -709,6 +859,10 @@ void petition_handler(void *client_socket) {
         }
     } else if (strcmp(operation, "DISCONNECT") == 0) {
         if (handle_disconnect(socket) < 0) {
+            pthread_exit(NULL);
+        }
+    } else if (strcmp(operation, "DELETE") == 0) {
+        if (handle_delete(socket) < 0) {
             pthread_exit(NULL);
         }
     }
