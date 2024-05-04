@@ -376,6 +376,12 @@ int unregister_user(char username[USERNAME_SIZE]) {
         return -1;
     }
 
+    // disconnect user if they are connected
+    int disconnect_user_rvalue = disconnect_user(username);
+    if (disconnect_user_rvalue < 0) {
+        return -1;
+    }
+
     // delete username from users.csv
     pthread_mutex_lock(&users_file_lock);
     FILE *users_file = fopen(users_filename, "r");
@@ -429,7 +435,6 @@ int handle_unregister(int client_socket) {
 
     // attempt to unregister user
     int unregister_user_rvalue = unregister_user(username);
-    
     
     // send error code to client
     if (unregister_user_rvalue < 0) {
@@ -891,13 +896,17 @@ int list_users(int client_socket) {
     // send usernum to client
     char *usernum_str;
     asprintf(&usernum_str, "%d", usernum);
+    sleep(0.1);
     write(client_socket, usernum_str, strlen(usernum_str));
 
     // send userlist to client
     for (int i = 0; i < usernum; i++) {
         printf("%s %s %s\n", userlist[i].username, userlist[i].ip, userlist[i].port);
+        sleep(0.1);
         write(client_socket, userlist[i].username, USERNAME_SIZE);
+        sleep(0.1);
         write(client_socket, userlist[i].ip, IP_ADDRESS_SIZE);
+        sleep(0.1);
         write(client_socket, userlist[i].port, PORT_SIZE);
     }
 
