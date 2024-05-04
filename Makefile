@@ -29,4 +29,5 @@ devtools.o: devtools.c  # temporary
 
 clean:
 	@rm -f *.csv
+	@rm -f *.json
 	@rm -f $(SERVER_OBJECT) $(SERVER)
