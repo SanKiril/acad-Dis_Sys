@@ -106,7 +106,8 @@ int check_username_existence(char username[USERNAME_SIZE]) {
     const long MAXLINE = 4096;
     char line[MAXLINE];
     while (fgets(line, MAXLINE, users_file) != NULL) {
-        if (strstr(line, username) != NULL) {
+        line[strlen(line)-1] = '\0';  // fgets keeps the newline, so we need to remove it
+        if (strcmp(line, username) == 0) {
             // username exists
             fclose(users_file);
             pthread_mutex_unlock(&users_file_lock);
@@ -228,7 +229,6 @@ int register_user(char username[USERNAME_SIZE]) {
 * @return -1 if error
 */
 int handle_register(int client_socket) {
-
     // get username from client socket
     char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
