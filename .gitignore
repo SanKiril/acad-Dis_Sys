@@ -56,3 +56,5 @@ server
 *.csv
 devtools.c
 devtools.h
+files/*
+*.json
