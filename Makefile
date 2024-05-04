@@ -28,6 +28,7 @@ devtools.o: devtools.c  # temporary
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
+	@rm -f files/*
 	@rm -f *.csv
 	@rm -f *.json
 	@rm -f $(SERVER_OBJECT) $(SERVER)
