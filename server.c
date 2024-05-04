@@ -190,65 +190,6 @@ int check_user_connection(char username[USERNAME_SIZE]) {
 }
 
 /**
-* @brief disconnect user from server if they are connected
-* @param username username to disconnect
-* @return 1 if disconnected, 0 otherwise
-* @return -1 if error
-*/
-int disconnect_user(char username[USERNAME_SIZE]) {
-    // check if user is connected
-    int check_user_connection_rvalue = check_user_connection(username);
-    if (check_user_connection_rvalue == 0) {
-        return 1;
-    } else if (check_user_connection_rvalue < 0) {
-        return -1;
-    }
-
-    // delete username line from connected.csv
-    pthread_mutex_lock(&connected_file_lock);
-    FILE *connected_file = fopen(connected_filename, "r+");
-    if (connected_file == NULL) {
-        pthread_mutex_unlock(&connected_file_lock);
-        perror("fopen");
-        return -1;
-    }
-    int MAXLINE = 4096;
-    char line[MAXLINE];
-    FILE *temp_connected_file = fopen("temp_connected.csv", "w");
-    if (temp_connected_file == NULL) {
-        pthread_mutex_unlock(&connected_file_lock);
-        perror("fopen");
-        return -1;
-    }
-    while (fgets(line, MAXLINE, connected_file) != 0) {
-        char *possible_username = strtok(line, ";");
-        if (strcmp(possible_username, username) != 0) {  // if user is not the line's username, write line into temp_file
-            fprintf(temp_connected_file, "%s", line);
-        }
-    }
-
-    // replace connected.csv with temp file
-    fclose(connected_file);
-    fclose(temp_connected_file);
-    remove(connected_filename);
-    rename("temp_connected.csv", connected_filename);
-    pthread_mutex_unlock(&connected_file_lock);
-
-    // is username exists in files folder, delete it too
-    int check_username_file_existance_rvalue = check_username_file_existance(username);
-    if (check_username_file_existance_rvalue == 1) {
-        char *username_file = malloc(strlen(files_foldername) + strlen(username) + 2);
-        asprintf(&username_file, "%s%s", files_foldername, username);
-        remove(username_file);
-        free(username_file);
-    } else if (check_username_file_existance_rvalue < 0) {
-        return -1;
-    }
-
-    return 0;
-}
-
-/**
 * @brief register user, adding it to users.csv file
 * @param username username to register
 * @return 0 if successful
@@ -311,6 +252,91 @@ int handle_register(int client_socket) {
     } else if (register_user_rvalue == 1) {
         // in case username already exists
         write(client_socket, "1", EXECUTION_STATUS_SIZE);
+    } else
+        write(client_socket, "0", EXECUTION_STATUS_SIZE);
+
+    printf("OPERATION FROM %s\n", username);
+    return 0;
+}
+
+int disconnect_user(char username[USERNAME_SIZE]) {
+    // check is user exists
+    int check_username_existence_rvalue = check_username_existence(username);
+    if (check_username_existence_rvalue == 0) {
+        return 1;
+    } else if (check_username_existence_rvalue < 0) {
+        return -1;
+    }
+
+    // check if user is connected
+    int check_user_connection_rvalue = check_user_connection(username);
+    if (check_user_connection_rvalue == 0) {
+        return 2;
+    } else if (check_user_connection_rvalue < 0) {
+        return -1;
+    }
+
+    // delete username line from connected.csv
+    pthread_mutex_lock(&connected_file_lock);
+    FILE *connected_file = fopen(connected_filename, "r+");
+    if (connected_file == NULL) {
+        pthread_mutex_unlock(&connected_file_lock);
+        perror("fopen");
+        return -1;
+    }
+    int MAXLINE = 4096;
+    char line[MAXLINE];
+    FILE *temp_connected_file = fopen("temp_connected.csv", "w");
+    if (temp_connected_file == NULL) {
+        pthread_mutex_unlock(&connected_file_lock);
+        perror("fopen");
+        return -1;
+    }
+    while (fgets(line, MAXLINE, connected_file) != 0) {
+        char *possible_username = strtok(line, ";");
+        if (strcmp(possible_username, username) != 0) {  // if user is not the line's username, write line into temp_file
+            fprintf(temp_connected_file, "%s", line);
+        }
+    }
+    fclose(connected_file);
+    fclose(temp_connected_file);
+    remove(connected_filename);
+    rename("temp_connected.csv", connected_filename);
+    pthread_mutex_unlock(&connected_file_lock);
+
+    // delete username file from files folder
+    pthread_mutex_lock(&files_folder_lock);
+    char *username_filename = malloc(strlen(files_foldername) + strlen(username) + 2);
+    asprintf(&username_filename, "%s%s", files_foldername, username);
+    remove(username_filename);
+    pthread_mutex_unlock(&files_folder_lock);
+    free(username_filename);
+    
+    return 0;
+}
+
+int handle_disconnect(int client_socket) {
+    // get username from client socket
+    char username[USERNAME_SIZE];
+    if (read(client_socket, username, USERNAME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+
+    // attempt to disconnect user
+    int disconnect_user_rvalue = disconnect_user(username);
+    
+    // send error code to client
+    if (disconnect_user_rvalue < 0) {
+        // in case there was an error
+        write(client_socket, "3", EXECUTION_STATUS_SIZE);
+        return -1;
+    } else if (disconnect_user_rvalue == 1) {
+        // in case username doesn't exist
+        write(client_socket, "1", EXECUTION_STATUS_SIZE);
+    } else if (disconnect_user_rvalue == 2) {
+        // in case user is not connected
+        write(client_socket, "2", EXECUTION_STATUS_SIZE);
     } else
         write(client_socket, "0", EXECUTION_STATUS_SIZE);
 
@@ -412,7 +438,7 @@ int handle_unregister(int client_socket) {
 * @return 1 if filename exists
 * @return 0 if filename doesn't exist
 */
-int check_file_existance(char username[USERNAME_SIZE], char filename[FILENAME_SIZE]) {
+int check_published_file_existance(char username[USERNAME_SIZE], char filename[FILENAME_SIZE]) {
     // open username
     char *username_filename = malloc(strlen(files_foldername) + strlen(username) + 2);
     asprintf(&username_filename, "%s%s", files_foldername, username);
@@ -468,7 +494,7 @@ int publish_file(char username[USERNAME_SIZE], char filename[FILENAME_SIZE], cha
     }
     
     // check if file has been published by user
-    int check_file_existance_rvalue = check_file_existance(username, filename);
+    int check_file_existance_rvalue = check_published_file_existance(username, filename);
     if (check_file_existance_rvalue == 1) {
         return 3;
     } else if (check_file_existance_rvalue < 0) {
@@ -679,6 +705,10 @@ void petition_handler(void *client_socket) {
         }
     } else if (strcmp(operation, "PUBLISH") == 0) {
         if (handle_publish(socket) < 0) {
+            pthread_exit(NULL);
+        }
+    } else if (strcmp(operation, "DISCONNECT") == 0) {
+        if (handle_disconnect(socket) < 0) {
             pthread_exit(NULL);
         }
     }
