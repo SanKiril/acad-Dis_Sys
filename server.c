@@ -21,7 +21,6 @@
 #define IP_ADDRESS_SIZE 16
 #define PORT_SIZE 6
 
-int socket_copied = 0;
 const char *users_filename = "users.csv";
 const char *connected_filename = "connected.csv";
 const char *files_foldername = "files/";
@@ -29,6 +28,8 @@ pthread_mutex_t users_file_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t connected_file_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t files_folder_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t socket_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t socket_cond = PTHREAD_COND_INITIALIZER;
+int socket_copied = 0;
 
 /**
 * @brief check program arguments
@@ -198,7 +199,6 @@ int register_user(char username[USERNAME_SIZE]) {
     // check if username exists in users.csv
     int check_username_existence_rvalue = check_username_existence(username);
     if (check_username_existence_rvalue == 1) {
-        fprintf(stderr, "Username already exists.\n");
         return 1;
     } else if (check_username_existence_rvalue < 0) {
         return -1;
@@ -235,9 +235,6 @@ int handle_register(int client_socket) {
         perror("read");
         return -1;
     }
-
-    printf("%s\n", username);
-    fflush(stdout);
 
     // attempt to register user
     int register_user_rvalue = register_user(username);
@@ -905,7 +902,6 @@ int list_users(int client_socket) {
 
     // send userlist to client
     for (int i = 0; i < usernum; i++) {
-        printf("%s %s %s\n", userlist[i].username, userlist[i].ip, userlist[i].port);
         sleep(0.1);
         write(client_socket, userlist[i].username, USERNAME_SIZE);
         sleep(0.1);
@@ -1026,8 +1022,12 @@ int list_content(int client_socket) {
 void petition_handler(void *client_socket) {
     // get petition from client socket
 
+    if (socket_copied == 1)
+        pthread_exit(NULL); 
     pthread_mutex_lock(&socket_lock);
     int socket = *(int *)client_socket;
+    socket_copied = 1;
+    pthread_cond_signal(&socket_cond);
     pthread_mutex_unlock(&socket_lock);
 
     char operation[OPERATION_SIZE];
@@ -1069,6 +1069,9 @@ void petition_handler(void *client_socket) {
         if (list_content(socket) < 0) {
             pthread_exit(NULL);
         }
+    } else {
+        printf("INCORRECT OPERATION\n");
+        pthread_exit(NULL);
     }
 
     pthread_exit(NULL);
@@ -1173,8 +1176,10 @@ int main(int argc, char* argv[]) {
     pthread_t thread;  // thread for handling new connections
 
     while (1) {
-        // listen for new connections
         printf("s>");
+        fflush(stdout);
+        
+        // listen for new connections
         if (listen(server_socket, 5) < 0) {
             perror("listen");
             exit(1);
@@ -1188,10 +1193,15 @@ int main(int argc, char* argv[]) {
         }
 
         // create thread
+        pthread_mutex_lock(&socket_lock);
+        socket_copied = 0;
         if (pthread_create(&thread, &threads_attr, (void *) petition_handler, (void *) &client_socket) < 0) {
             perror("pthread_create");
             exit(1);
         }
+        while (socket_copied == 0)
+            pthread_cond_wait(&socket_cond, &socket_lock);
+        pthread_mutex_unlock(&socket_lock);
 
         // ensure the system knows that the thread can be cleaned up automatically without the server waiting
         if (pthread_join(thread, NULL) < 0) {

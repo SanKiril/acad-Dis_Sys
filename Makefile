@@ -9,14 +9,10 @@ SERVER = server
 
 # Define all rules
 all:
-	@make -s clean
 	@clear
+	@make -s clean
 	@make -s $(SERVER)
 	@echo "Compiled server"
-
-test:
-	@make -s all
-	@make -s clean
 
 $(SERVER): $(SERVER_OBJECT)
 	$(CC) $(CFLAGS) -o $@ $^
@@ -32,3 +28,4 @@ clean:
 	@rm -f *.csv
 	@rm -f *.json
 	@rm -f $(SERVER_OBJECT) $(SERVER)
+	@echo "Cleaned up"
