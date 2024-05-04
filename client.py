@@ -7,7 +7,7 @@ import os
 import errno
 import io
 from time import sleep
-
+import signal
 
 # messages size in bytes
 EXECUTION_STATUS_SIZE = 1
@@ -506,6 +506,15 @@ class client:
             print("GET_FILE FAIL")
             return client.RC.ERROR
 
+    def quit(self, _signum=None, _frame=None) -> int:
+        if self.__server_socket is not None:
+            self.__server_socket.close()
+            self.__server_socket = None
+            self.__server_thread.join()
+            self.__server_thread = None
+        print("\n+++ FINISHED +++")
+        exit(0)
+
     # *
     # **
     # * @brief Command interpreter for the client. It calls the protocol functions.
@@ -575,13 +584,9 @@ class client:
                             print("Syntax error. Usage: GET_FILE <username> <remote_filename> <local_filename>")
 
                     elif(line[0]=="QUIT"):
+                        self.quit()
                         if (len(line) == 1):
-                            # CLIENT-CLIENT CONNECTION
-                            if self.__server_socket is not None:
-                                self.__server_socket.close()
-                                self.__server_socket = None
-                                self.__server_thread.join()
-                                self.__server_thread = None
+                            self.quit()
                             break
                         else:
                             print("Syntax error. Usage: QUIT")
@@ -625,8 +630,8 @@ class client:
             return
 
         #  Write code here
+        signal.signal(signal.SIGINT, self.quit)
         self.shell()
-        print("+++ FINISHED +++")
     
 
 if __name__=="__main__":
