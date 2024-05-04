@@ -11,8 +11,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "devtools.h"
-
 #define OPERATION_SIZE 256
 #define EXECUTION_STATUS_SIZE 1
 #define NUMBER_USERS_SIZE 4

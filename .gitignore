@@ -54,7 +54,6 @@ dkms.conf
 *.sync-conflict*
 server
 *.csv
-devtools.c
-devtools.h
+devtools.*
 files/*
 *.json
