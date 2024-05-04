@@ -786,6 +786,12 @@ int delete(char username[USERNAME_SIZE], char filename[FILENAME_SIZE]) {
     return 0;
 }
 
+/**
+* @brief delete operation handler. Calls delete() and sends error code to client
+* @param client_socket socket of client
+* @return 0 if successful
+* @return -1 if error
+*/
 int handle_delete(int client_socket) {
     // get username from client
     char username[USERNAME_SIZE];
@@ -818,6 +824,85 @@ int handle_delete(int client_socket) {
     } else {
         write(client_socket, "0", EXECUTION_STATUS_SIZE);
     }
+
+    printf("OPERATION FROM %s\n", username);
+    return 0;
+}
+
+// user in connected.csv, with username, ip, port
+struct user {
+    char username[USERNAME_SIZE];
+    char ip[IP_ADDRESS_SIZE];
+    char port[PORT_SIZE];
+};
+
+int list_users(int client_socket) {
+    // get username from client
+    char username[USERNAME_SIZE];
+    if (read(client_socket, username, USERNAME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+
+    // check if username exists
+    int check_username_existence_rvalue = check_username_existence(username);
+    if (check_username_existence_rvalue == 0) {
+        write(client_socket, "1", EXECUTION_STATUS_SIZE);
+        return 0;
+    } else if (check_username_existence_rvalue < 0) {
+        write(client_socket, "3", EXECUTION_STATUS_SIZE);
+        return -1;
+    }
+
+    // check if user is connected
+    int check_user_connection_rvalue = check_user_connection(username);
+    if (check_user_connection_rvalue == 0) {
+        write(client_socket, "2", EXECUTION_STATUS_SIZE);
+        return 0;
+    } else if (check_user_connection_rvalue < 0) {
+        write(client_socket, "3", EXECUTION_STATUS_SIZE);
+        return -1;
+    }
+
+    write(client_socket, "0", EXECUTION_STATUS_SIZE);
+
+    // open connected.csv
+    pthread_mutex_lock(&connected_file_lock);
+    FILE *connected_file = fopen(connected_filename, "r");
+    if (connected_file == NULL) {
+        perror("fopen");
+        return -1;
+    }
+
+    int MAX_USERS = 100;
+    struct user userlist[MAX_USERS];
+    int usernum = 0;
+    int MAXLINE = 4096;
+    char line[MAXLINE];
+
+    // get user's info from connected.csv
+    while (fgets(line, MAXLINE, connected_file) != 0) {
+        strcpy(userlist[usernum].username, strtok(line, ";"));
+        strcpy(userlist[usernum].ip, strtok(NULL, ";"));
+        strcpy(userlist[usernum].port, strtok(NULL, ";"));
+        usernum++;
+    }
+
+    // send usernum to client
+    char *usernum_str;
+    asprintf(&usernum_str, "%d", usernum);
+    write(client_socket, usernum_str, strlen(usernum_str));
+
+    // send userlist to client
+    for (int i = 0; i < usernum; i++) {
+        printf("%s %s %s\n", userlist[i].username, userlist[i].ip, userlist[i].port);
+        write(client_socket, userlist[i].username, USERNAME_SIZE);
+        write(client_socket, userlist[i].ip, IP_ADDRESS_SIZE);
+        write(client_socket, userlist[i].port, PORT_SIZE);
+    }
+
+    fclose(connected_file);
+    pthread_mutex_unlock(&connected_file_lock);
 
     printf("OPERATION FROM %s\n", username);
     return 0;
@@ -863,6 +948,10 @@ void petition_handler(void *client_socket) {
         }
     } else if (strcmp(operation, "DELETE") == 0) {
         if (handle_delete(socket) < 0) {
+            pthread_exit(NULL);
+        }
+    } else if (strcmp(operation, "LIST_USERS") == 0) {
+        if (list_users(socket) < 0) {
             pthread_exit(NULL);
         }
     }

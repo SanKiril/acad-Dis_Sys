@@ -361,7 +361,8 @@ class client:
                     # GET LIST OF USERS
                     users_list = []
                     output = "LIST_USERS OK\n"
-                    number_users = int.from_bytes(client_socket.recv(NUMBER_USERS_SIZE), byteorder='big', signed=False)  # Number of users
+                    number_users = int(client_socket.recv(NUMBER_USERS_SIZE).decode())
+                    # number_users = int.from_bytes(client_socket.recv(NUMBER_USERS_SIZE), byteorder='big', signed=False)  # Number of users
                     for _ in range(number_users):
                         user_info = {
                             "Username": client_socket.recv(USERNAME_SIZE).decode().rstrip('\0'),  # Username
