@@ -122,39 +122,6 @@ int check_username_existence(char username[USERNAME_SIZE]) {
 }
 
 /**
-* @brief check if username exists in files folder
-* @param username username to check
-* @return 1 if exists, 0 otherwise
-* @return -1 if error
-*/
-int check_username_file_existance(char username[USERNAME_SIZE]) {
-    // open files folder
-    pthread_mutex_lock(&files_folder_lock);
-    DIR *dir = opendir(files_foldername);
-    if (dir == NULL) {
-        perror("opendir");
-        pthread_mutex_unlock(&files_folder_lock);
-        return -1;
-    }
-
-    // check if username is one of the files in the folder
-    struct dirent *ent;
-    while ((ent = readdir(dir)) != NULL) {
-        if (strcmp(ent->d_name, username) == 0) {
-            // username exists
-            closedir(dir);
-            pthread_mutex_unlock(&files_folder_lock);
-            return 1;
-        }
-    }
-    
-    // username doesn't exist
-    closedir(dir);
-    pthread_mutex_unlock(&files_folder_lock);
-    return 0;
-}
-
-/**
 * @brief check if user is connected (if username in connected.csv)
 * @param username username to check
 * @return 1 if connected, 0 otherwise
@@ -408,9 +375,6 @@ int unregister_user(char username[USERNAME_SIZE]) {
     rename("temp_users.csv", users_filename);
     pthread_mutex_unlock(&users_file_lock);
 
-    // disconnect user in case they were connected
-    disconnect_user(username);
-
     return 0;
 }
 
@@ -517,7 +481,7 @@ int publish_file(char username[USERNAME_SIZE], char filename[FILENAME_SIZE], cha
         return -1;
     }
 
-    // open username
+    // open username file
     char *username_filename = malloc(strlen(files_foldername) + strlen(username) + 2);
     asprintf(&username_filename, "%s%s", files_foldername, username);
     pthread_mutex_lock(&files_folder_lock);
@@ -595,7 +559,7 @@ int handle_publish(int client_socket) {
 * @param client_socket socket of client
 * @return 0 if successful
 * @return 1 if user doesn't exist
-* @return 2 if user is already connected
+* @return 2 if user is ubt already connected
 * @return -1 if error
 */
 int connect_user(char username[USERNAME_SIZE], char ip[IP_ADDRESS_SIZE], char port[PORT_SIZE]) {
@@ -732,7 +696,7 @@ int delete(char username[USERNAME_SIZE], char filename[FILENAME_SIZE]) {
         return -1;
     }
 
-    // check if the files has been published by user
+    // check if the file has been published by the user
     int check_published_file_existance_rvalue = check_published_file_existance(username, filename);
     if (check_published_file_existance_rvalue == 0) {
         return 3;
