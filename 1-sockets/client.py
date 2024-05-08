@@ -120,7 +120,7 @@ class client:
                             try:
                                 # SEND FILE TO CLIENT
                                 with open(filename, "rb") as file:
-                                    client_socket.sendall(b"\x00")  # "0"
+                                    client_socket.sendall("0".encode())  # "0"
                                     while True:
                                         data = file.read(io.DEFAULT_BUFFER_SIZE)
                                         if not data:
@@ -128,10 +128,10 @@ class client:
                                         client_socket.sendall(data)
                                 return client.RC.OK
                             except (FileNotFoundError, IOError):
-                                client_socket.sendall(b"\x01")  # "1"
+                                client_socket.sendall("1".encode())  # "1"
                                 return client.RC.USER_ERROR
                         else:
-                            client_socket.sendall(b"\x02")  # "2"
+                            client_socket.sendall("2".encode())  # "2"
                             return client.RC.ERROR
                 except socket.error as e:
                     if e.errno == errno.EINTR:  # Interrupted system call
@@ -458,7 +458,11 @@ class client:
         try:
             with open(f"listusers-{self.__username}.json", 'r') as file:
                 users_list = json.load(file)
-                user_info = users_list.get(username)
+                user_info = None
+                for user in users_list:
+                    if user["Username"] == username:
+                        user_info = user
+                        break
                 if user_info is None:
                     print("GET_FILE FAIL")
                     return client.RC.ERROR
@@ -475,10 +479,15 @@ class client:
                 client_socket.sendall("GET_FILE\0".encode())  # LIST_CONTENT ...
                 sleep(0.1)
                 client_socket.sendall(f"{remote_filename}\0".encode())  # ... <remote_filename>
+                print("send remote filename")
 
                 # RECEIVE RESPONSE FROM CLIENT
-                response = client_socket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
-
+                response = client_socket.recv(bufsize=EXECUTION_STATUS_SIZE)  # Execution status
+                try:
+                    response.decode()
+                except:
+                    print("lmao")
+                print(type(response))
                 # CHECK RESPONSE FROM CLIENT
                 if response == '0':
                     try:
