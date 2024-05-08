@@ -118,16 +118,29 @@ class client:
                         if client_socket.recv(9).decode().rstrip('\0') == "GET_FILE":  # GET_FILE ...
                             filename = client_socket.recv(FILENAME_SIZE).decode().rstrip('\0')  # ... Filename
                             try:
-                                # SEND FILE TO CLIENT
-                                with open(filename, "rb") as file:
-                                    client_socket.sendall("0".encode())  # "0"
-                                    while True:
-                                        data = file.read(io.DEFAULT_BUFFER_SIZE)
-                                        if not data:
-                                            break
-                                        client_socket.sendall(data)
-                                return client.RC.OK
-                            except (FileNotFoundError, IOError):
+                                # CHECK IF FILE IS PUBLISHED
+                                with open(f"published-{self.__username}.json", "r") as file:  # read from published files
+                                    published = json.load(file)
+                                exists = False
+                                for file in published:
+                                    exists = file["Filename"] == filename
+                                    if exists:
+                                        break
+                                
+                                if exists:
+                                    # SEND FILE TO CLIENT
+                                    with open(filename, "rb") as file:
+                                        client_socket.sendall("0".encode())  # "0"
+                                        while True:
+                                            data = file.read(io.DEFAULT_BUFFER_SIZE)
+                                            if not data:
+                                                break
+                                            client_socket.sendall(data)
+                                    return client.RC.OK
+                                else:
+                                    client_socket.sendall("1".encode())  # "1"
+                                    return client.RC.USER_ERROR
+                            except (FileNotFoundError, IOError, json.JSONDecodeError):
                                 client_socket.sendall("1".encode())  # "1"
                                 return client.RC.USER_ERROR
                         else:
@@ -278,8 +291,18 @@ class client:
 
                 # CHECK RESPONSE FROM SERVER
                 if response == '0':
-                    print("PUBLISH OK")
-                    return client.RC.OK
+                    try:
+                        # ADD PUBLIHED FILE
+                        with open(f"published-{self.__username}.json", "r") as file:  # read from published files
+                            published = json.load(file)
+                        published.append({"Filename": filename, "Description": description})  # update published files
+                        with open(f"published-{self.__username}.json", "w") as file:  # write to published files
+                            json.dump(published, file, indent=4)
+                        print("PUBLISH OK")
+                        return client.RC.OK
+                    except (FileNotFoundError, json.JSONDecodeError):
+                        print("DELETE FAIL")
+                        return client.RC.ERROR
                 elif response == '1':
                     print("PUBLISH FAIL, USER DOES NOT EXIST")
                     return client.RC.USER_ERROR
@@ -324,8 +347,21 @@ class client:
                 
                 # CHECK RESPONSE FROM SERVER
                 if response == '0':
-                    print("DELETE OK")
-                    return client.RC.OK
+                    try:
+                        # DELETE PUBLIHED FILE
+                        with open(f"published-{self.__username}.json", "r") as file:  # read from published files
+                            published = json.load(file)
+                        for file in published:
+                            if file["Filename"] == filename:
+                                del file  # update published files
+                                break
+                        with open(f"published-{self.__username}.json", "w") as file:  # write to published files
+                            json.dump(published, file, indent=4)
+                        print("DELETE OK")
+                        return client.RC.OK
+                    except (FileNotFoundError, json.JSONDecodeError):
+                        print("DELETE FAIL")
+                        return client.RC.ERROR
                 elif response == '1':
                     print("DELETE FAIL, USER DOES NOT EXIST")
                     return client.RC.USER_ERROR
@@ -358,26 +394,29 @@ class client:
 
                 # CHECK RESPONSE FROM SERVER
                 if response == '0':
-                    # GET LIST OF USERS
-                    users_list = []
-                    output = "LIST_USERS OK\n"
-                    number_users = int(client_socket.recv(NUMBER_USERS_SIZE).decode())
-                    # number_users = int.from_bytes(client_socket.recv(NUMBER_USERS_SIZE), byteorder='big', signed=False)  # Number of users
-                    for _ in range(number_users):
-                        user_info = {
-                            "Username": client_socket.recv(USERNAME_SIZE).decode().rstrip('\0'),  # Username
-                            "IP address": client_socket.recv(IP_ADDRESS_SIZE).decode().rstrip('\0'),  # IP address
-                            "Port": client_socket.recv(PORT_SIZE).decode().rstrip('\0\n')   # Port
-                        }
-                        users_list.append(user_info)
-                        output += f"{user_info['Username']} {user_info['IP address']} {user_info['Port']}\n"
-                    
-                    # SAVE LIST OF USERS TO FILE
-                    with open(f"listusers-{self.__username}.json", "w") as file:
-                        json.dump(users_list, file, indent=4)
-
-                    print(output)
-                    return client.RC.OK
+                    try:
+                        # GET LIST OF USERS
+                        users_list = []
+                        output = "LIST_USERS OK\n"
+                        number_users = int(client_socket.recv(NUMBER_USERS_SIZE).decode())
+                        for _ in range(number_users):
+                            user_info = {
+                                "Username": client_socket.recv(USERNAME_SIZE).decode().rstrip('\0'),  # Username
+                                "IP address": client_socket.recv(IP_ADDRESS_SIZE).decode().rstrip('\0'),  # IP address
+                                "Port": client_socket.recv(PORT_SIZE).decode().rstrip('\0\n')   # Port
+                            }
+                            users_list.append(user_info)
+                            output += f"{user_info['Username']} {user_info['IP address']} {user_info['Port']}\n"
+                        
+                        # SAVE LIST OF USERS TO FILE
+                        with open(f"listusers-{self.__username}.json", "w") as file:
+                            json.dump(users_list, file, indent=4)
+                        
+                        print(output)
+                        return client.RC.OK
+                    except (FileNotFoundError, json.JSONDecodeError):
+                        print("LIST_USERS FAIL")
+                        return client.RC.ERROR
                 if response == '1':
                     print("LIST_USERS FAIL, USER DOES NOT EXIST")
                     return client.RC.USER_ERROR
@@ -476,18 +515,14 @@ class client:
                 client_socket.connect((user_info["IP address"], user_info["Port"]))
 
                 # SEND REQUEST TO CLIENT
-                client_socket.sendall("GET_FILE\0".encode())  # LIST_CONTENT ...
+                client_socket.sendall("GET_FILE\0".encode())  # GET_FILE ...
                 sleep(0.1)
                 client_socket.sendall(f"{remote_filename}\0".encode())  # ... <remote_filename>
                 print("send remote filename")
 
                 # RECEIVE RESPONSE FROM CLIENT
-                response = client_socket.recv(bufsize=EXECUTION_STATUS_SIZE)  # Execution status
-                try:
-                    response.decode()
-                except:
-                    print("lmao")
-                print(type(response))
+                response = client_socket.recv(EXECUTION_STATUS_SIZE)  # Execution status
+
                 # CHECK RESPONSE FROM CLIENT
                 if response == '0':
                     try:
