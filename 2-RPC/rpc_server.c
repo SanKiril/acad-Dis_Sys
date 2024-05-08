@@ -572,7 +572,8 @@ list_users_1_svc(USERNAME username, struct list_users_rvalue *result,  struct sv
         strcpy(result->user_list[usernum].username, strtok(line, ";"));
         strcpy(result->user_list[usernum].ip, strtok(NULL, ";"));
         strcpy(result->user_list[usernum].port, strtok(NULL, ";"));
-        usernum += 1;
+        printf("Got info from user number %d", usernum);
+        usernum ++;
     }
 
 	result->usernum = usernum;

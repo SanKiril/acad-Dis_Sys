@@ -467,11 +467,6 @@ int handle_list_content(int client_socket) {
     return 0;
 }
 
-
-
-
-
-
 /**
 * @brief thread function to handle petition from client, calling the specific handler
 * @param client_socket client socket

@@ -1,51 +1,46 @@
-CC = gcc
 
-# Compiler flags
-CLFAGS = -Wall -g -Wno-unused-variable
-LDFLAGS = -lrt -pthread -lnsl -lpthread -ltirpc -I/usr/include/tirpc
+
+SOCKET_SERVER = server
+RPC_SERVER = rpc_server
+
+SOURCES.x = filemanager.x
+
+TARGETS_SVC.c = filemanager_svc.c filemanager_xdr.c rpc_server.c
+TARGETS_CLNT.c = filemanager_clnt.c filemanager_xdr.c server.c
+TARGETS = filemanager.h filemanager_xdr.c filemanager_clnt.c filemanager_svc.c filemanager_client.c filemanager_server.c
+
+OBJECTS_CLNT = $(TARGETS_CLNT.c:%.c=%.o)
+OBJECTS_SVC = $(TARGETS_SVC.c:%.c=%.o)
+# Compiler flags 
+
+CPPFLAGS += -D_REENTRANT
+CFLAGS += -g 
+LDLIBS += -lnsl -lpthread -I/usr/include/tirpc -ltirpc
 RPCGENFLAGS = -NM
 
-# Server files
-SERVER = server
-SERVER.c = server.c
-
-# RPC files
-RPC_SERVER = rpc_server
-RPCGEN = rpcgen
-SOURCES.x = filemanager.x
-TARGETS.c = filemanager_svc.c rpc_server.c filemanager_xdr.c filemanager_clnt.c
-TARGETS.h = filemanager.h
-TARGETS = $(TARGETS.h) + $(TARGETS.c)
-RPCGEN_FILES = filemanager_xrd.c filemanager_svc.c filemanager_clnt.c
-OBJECTS = $(TARGETS.c:%.c=%.o)
-RPC_SERVER_OBJECTS = filemanager_svc.o rpc_server.o filemanager_xdr.o
-RPC_CLIENT_OBJECTS = filemanager_clnt.o
+# Targets 
 
 all:
 	@clear
 	@make -s clean
-	@make -s $(SERVER)
+	@make -s $(SOCKET_SERVER)
+	@echo "Compiled socket server"
+	@make -s $(RPC_SERVER)
+	@echo "Compiled rpc server"
 
-$(OBJECTS): $(TARGETS.c)
-$(RPCGEN): $(RPCGEN_FILES)
+$(TARGETS) : $(SOURCES.x) 
+	rpcgen $(RPCGENFLAGS) $(SOURCES.x)
 
-$(RPCGEN_FILES) $(TARGETS.h): $(SOURCES.x)
-	$(RPCGEN) $(RPCGENFLAGS) $(SOURCES.x)
-	$(RPCGEN) $(RPCGENFLAGS) -s tcp $(SOURCES.x) > filemanager_svc.c 
+$(OBJECTS_CLNT) : $(TARGETS_CLNT.c) 
 
-$(RPC_SERVER): $(RPC_SERVER_OBJECTS) $(RPCGEN_FILES)
-	$(LINK.c) -o $(RPC_SERVER) $(RPC_SERVER_OBJECTS)
-	echo "Compiled RPC server"
+$(OBJECTS_SVC) : $(TARGETS_SVC.c) 
 
-$(SERVER): $(SERVER.c) $(RPC_SERVER)
-	$(LINK.c) -o server filemanager_clnt.c server.c
-	echo "Compiled server"
+$(SOCKET_SERVER) : $(OBJECTS_CLNT) 
+	$(LINK.c) -o $(SOCKET_SERVER) $(OBJECTS_CLNT) $(LDLIBS) 
 
-clean:
-	@rm -f filemanager.h
-	@rm -f filemanager_*
-	@rm -f files/*
-	@rm -f *.csv
-	@rm -f *.json
-	@rm -f $(OBJECTS) $(SERVER_OBJECT) $(RPC_SERVER) $(SERVER)
-	@echo "Cleaned up"
+$(RPC_SERVER) : $(OBJECTS_SVC) 
+	$(LINK.c) -o $(RPC_SERVER) $(OBJECTS_SVC) $(LDLIBS)
+
+ clean:
+	 @$(RM) core $(TARGETS) $(OBJECTS_CLNT) $(OBJECTS_SVC) $(SOCKET_SERVER) $(RPC_SERVER)
+

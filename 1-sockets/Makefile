@@ -1,5 +1,6 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -g  # Add additional flags as needed
+CFLAGS = -Wall -Wextra -g 
+LDFLAGS =-lrt -pthread -lnsl -lpthread -ltirpc -I/usr/include/tirpc
 
 # Define object files
 SERVER_OBJECT = server.o
@@ -15,10 +16,10 @@ all:
 	@echo "Compiled server"
 
 $(SERVER): $(SERVER_OBJECT)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(LINK.c) $(CFLAGS) -o $@ $^
 
 $(SERVER_OBJECT): server.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(LINK.c) $(CFLAGS) -c $< -o $@
 
 clean:
 	@rm -f files/*
