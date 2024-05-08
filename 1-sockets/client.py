@@ -518,7 +518,6 @@ class client:
                 client_socket.sendall("GET_FILE\0".encode())  # GET_FILE ...
                 sleep(0.1)
                 client_socket.sendall(f"{remote_filename}\0".encode())  # ... <remote_filename>
-                print("send remote filename")
 
                 # RECEIVE RESPONSE FROM CLIENT
                 response = client_socket.recv(EXECUTION_STATUS_SIZE)  # Execution status
