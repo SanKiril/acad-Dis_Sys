@@ -409,11 +409,15 @@ int handle_list_users(int client_socket) {
     for (int i = 0; i < list_users_result.usernum; i++) {
         sleep(0.1);
         write(client_socket,list_users_result. user_list[i].username, USERNAME_SIZE);
+        free(list_users_result.user_list[i].username);
         sleep(0.1);
         write(client_socket, list_users_result.user_list[i].ip, IP_ADDRESS_SIZE);
+        free(list_users_result.user_list[i].ip);
         sleep(0.1);
         write(client_socket, list_users_result.user_list[i].port, PORT_SIZE);
+        free(list_users_result.user_list[i].port);
     }
+
 
     printf("OPERATION FROM %s\n", username);
     return 0;

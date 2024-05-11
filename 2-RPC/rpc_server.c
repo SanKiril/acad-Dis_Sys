@@ -569,10 +569,12 @@ list_users_1_svc(USERNAME username, struct list_users_rvalue *result,  struct sv
 
     // get user's info from connected.csv
     while (fgets(line, MAXLINE, connected_file) != 0) {
-        strcpy(result->user_list[usernum].username, strtok(line, ";"));
-        strcpy(result->user_list[usernum].ip, strtok(NULL, ";"));
-        strcpy(result->user_list[usernum].port, strtok(NULL, ";"));
-        printf("Got info from user number %d", usernum);
+        result->user_list[usernum].username = malloc(MAXLINE);
+        result->user_list[usernum].username = strtok(line, ";");
+       result->user_list[usernum].ip = malloc(MAXLINE);
+        result->user_list[usernum].ip = strtok(NULL, ";");
+        result->user_list[usernum].port = malloc(MAXLINE);
+        result->user_list[usernum].port = strtok(NULL, ";");
         usernum ++;
     }
 
