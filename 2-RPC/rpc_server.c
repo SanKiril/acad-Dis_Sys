@@ -611,11 +611,8 @@ list_users_1_svc(USERNAME username, USERLIST *result,  struct svc_req *rqstp)
     // get user's info from connected.csv
     int usernum = 0;
     while (fgets(line, MAXLINE, connected_file) != 0) {
-        result->USERLIST_val[usernum].username = malloc(MAXLINE);
         result->USERLIST_val[usernum].username = strtok(line, ";");
-        result->USERLIST_val[usernum].ip = malloc(MAXLINE);
         result->USERLIST_val[usernum].ip = strtok(NULL, ";");
-        result->USERLIST_val[usernum].port = malloc(MAXLINE);
         result->USERLIST_val[usernum].port = strtok(NULL, ";");
         usernum++;
     }
@@ -723,11 +720,9 @@ list_content_1_svc(USERNAME username, USERNAME requested_username, FILELIST *res
     char line[MAXLINE];
     while (fgets(line, MAXLINE, username_file) != 0) {
         if ((strcmp(line, "\n") == 0) || (strcmp(line, "") == 0)) {
-            break;
+            continue;
         }
-        result -> FILELIST_val[filenum].filename = malloc(MAXLINE);
         result -> FILELIST_val[filenum].filename = strtok(line, ";");
-        result -> FILELIST_val[filenum].description = malloc(MAXLINE);
         result -> FILELIST_val[filenum].description = strtok(NULL, ";");
     }
 
