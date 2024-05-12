@@ -27,19 +27,17 @@ RPCGENFLAGS = -NM
 # Targets 
 all:
 	@clear
-	@make -s socket
 	@make -s clean
+	@make -s socket
 	@make -s rpc
 
 rpc:
-	@make -s clean
 	@make -s $(SOCKET_SERVER)
 	@echo "Compiled rpc socket server"
 	@make  -s $(RPC_SERVER)
 	@echo "Compiled rpc server"
 
 socket:
-	@make -s clean
 	@make -s $(SERVER)
 	@echo "Compiled socket server"
 
@@ -67,7 +65,7 @@ $(RPC_SERVER) : $(OBJECTS_SVC)
 	$(LINK.c) -o $(RPC_SERVER) $(OBJECTS_SVC) $(LDLIBS)
 
 $(SERVER): $(SERVER_OBJECT)
-	$(LINK.c) $(CFLAGS) -o $@ $^
+	$(LINK.c) $(CFLAGS) -o $(SERVER) $(SERVER_OBJECT) $(LDLIBS)
 
 $(SERVER_OBJECT): server.c
 	$(LINK.c) $(CFLAGS) -c $< -o $@

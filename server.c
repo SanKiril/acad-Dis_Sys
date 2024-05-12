@@ -20,6 +20,7 @@
 #define DESCRIPTION_SIZE 256
 #define IP_ADDRESS_SIZE 16
 #define PORT_SIZE 6
+#define DATETIME_SIZE 20
 
 const char *users_filename = "users.csv";
 const char *connected_filename = "connected.csv";
@@ -164,6 +165,7 @@ int check_user_connection(char username[USERNAME_SIZE]) {
 * @return -1 if error
 */
 int register_user(char username[USERNAME_SIZE]) {
+    
     // check if username exists in users.csv
     int check_username_existence_rvalue = check_username_existence(username);
     if (check_username_existence_rvalue == 1) {
@@ -196,6 +198,7 @@ int register_user(char username[USERNAME_SIZE]) {
 * @return -1 if error
 */
 int handle_register(int client_socket) {
+    
     // get username from client socket
     char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -294,6 +297,7 @@ int disconnect_user(char username[USERNAME_SIZE]) {
 * @return -1 if error
 */
 int handle_disconnect(int client_socket) {
+    
     // get username from client socket
     char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -386,6 +390,7 @@ int unregister_user(char username[USERNAME_SIZE]) {
 * @return -1 if error
 */
 int handle_unregister(int client_socket) {
+    
     // get username from client socket
     char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -509,6 +514,7 @@ int publish_file(char username[USERNAME_SIZE], char filename[FILENAME_SIZE], cha
 * @return -1 if error
 */
 int handle_publish(int client_socket) {
+    
     // get username from client socket
     char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -616,6 +622,7 @@ int connect_user(char username[USERNAME_SIZE], char ip[IP_ADDRESS_SIZE], char po
 * @return -1 if error
 */
 int handle_connect(int client_socket) {
+    
     // get username from client socket
     char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -758,6 +765,7 @@ int delete(char username[USERNAME_SIZE], char filename[FILENAME_SIZE]) {
 * @return -1 if error
 */
 int handle_delete(int client_socket) {
+    
     // get username from client
     char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -808,6 +816,7 @@ struct user {
 * @return -1 if error
 */
 int list_users(int client_socket) {
+ 
     // get username from client
     char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -888,6 +897,7 @@ struct file {
 };
 
 int list_content(int client_socket) {
+
     // get username from client
     char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -997,6 +1007,12 @@ void petition_handler(void *client_socket) {
 
     char operation[OPERATION_SIZE];
     if (read(socket, operation, OPERATION_SIZE) < 0) {
+        perror("read");
+        pthread_exit(NULL);
+    }
+
+    char datetime[DATETIME_SIZE];
+    if (read(socket, datetime, DATETIME_SIZE) < 0) {
         perror("read");
         pthread_exit(NULL);
     }
