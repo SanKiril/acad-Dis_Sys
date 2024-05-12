@@ -21,6 +21,7 @@
 #define DESCRIPTION_SIZE 256
 #define IP_ADDRESS_SIZE 16
 #define PORT_SIZE 6
+#define DATETIME_SIZE 20
 
 const char *users_filename = "users.csv";
 const char *connected_filename = "connected.csv";
@@ -43,11 +44,11 @@ unsigned int check_arguments(int argc, char *argv[]) {
     // check program arguments
     if (argc != 3) {
         fprintf(stderr, "Usage: ./server -p <port>\n");
-        return -1;
+        exit(-1);
     }
     if (strcmp(argv[1], "-p") != 0) {
         fprintf(stderr, "Usage: ./server -p <port>\n");
-        return -1;
+        exit(-1);
     }
 
     return atoi(argv[2]);
@@ -94,6 +95,13 @@ struct local_ip_info get_local_ip() {
 * @return -1 if error
 */
 int handle_register(int client_socket) {
+    // get datetime from client socket
+    char datetime[DATETIME_SIZE];
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+
     // get username from client socket
     char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -119,7 +127,7 @@ int handle_register(int client_socket) {
     } else
         write(client_socket, "0", EXECUTION_STATUS_SIZE);
 
-    printf("OPERATION FROM %s\n", username);
+    printf("%s\t%s\t%s\n", username, "REGISTER", datetime);
     return 0;
 }
 
@@ -130,6 +138,13 @@ int handle_register(int client_socket) {
 * @return -1 if error
 */
 int handle_disconnect(int client_socket) {
+    // get datetime from client socket
+    char datetime[DATETIME_SIZE];
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+
     // get username from client socket
     char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -158,7 +173,7 @@ int handle_disconnect(int client_socket) {
     } else
         write(client_socket, "0", EXECUTION_STATUS_SIZE);
 
-    printf("OPERATION FROM %s\n", username);
+    printf("%s\t%s\t%s\n", username, "DISCONNECT", datetime);
     return 0;
 }
 
@@ -169,6 +184,13 @@ int handle_disconnect(int client_socket) {
 * @return -1 if error
 */
 int handle_unregister(int client_socket) {
+    // get datetime from client socket
+    char datetime[DATETIME_SIZE];
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+
     // get username from client socket
     char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -194,7 +216,7 @@ int handle_unregister(int client_socket) {
     } else {
         write(client_socket, "0", EXECUTION_STATUS_SIZE);
     }
-    printf("OPERATION FROM %s\n", username);
+    printf("%s\t%s\t%s\n", username, "UNREGISTER", datetime);
     return 0;
 }
 
@@ -205,6 +227,14 @@ int handle_unregister(int client_socket) {
 * @return -1 if error
 */
 int handle_publish(int client_socket) {
+
+    // get datetime from client socket
+    char datetime[DATETIME_SIZE];
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+    
     // get username from client socket
     char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -251,7 +281,7 @@ int handle_publish(int client_socket) {
         write(client_socket, "0", EXECUTION_STATUS_SIZE);
     }
 
-    printf("OPERATION FROM %s\n", username);
+    printf("%s\t%s\t%s\n", username, "PUBLISH", datetime);
     return 0;
 }
 
@@ -262,6 +292,14 @@ int handle_publish(int client_socket) {
 * @return -1 if error
 */
 int handle_connect(int client_socket) {
+
+    // get datetime from client socket
+    char datetime[DATETIME_SIZE];
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+    
     // get username from client socket
     char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -316,7 +354,7 @@ int handle_connect(int client_socket) {
         write(client_socket, "0", EXECUTION_STATUS_SIZE);
     }
 
-    printf("OPERATION FROM %s\n", username);
+    printf("%s\t%s\t%s\n", username, "CONNECT", datetime);
 
     return 0;
 }
@@ -328,6 +366,14 @@ int handle_connect(int client_socket) {
 * @return -1 if error
 */
 int handle_delete(int client_socket) {
+
+    // get datetime from client socket
+    char datetime[DATETIME_SIZE];
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+    
     // get username from client
     char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -366,7 +412,7 @@ int handle_delete(int client_socket) {
         write(client_socket, "0", EXECUTION_STATUS_SIZE);
     }
 
-    printf("OPERATION FROM %s\n", username);
+    printf("%s\t%s\t%s\n", username, "DELETE", datetime);
     return 0;
 }
 
@@ -377,6 +423,13 @@ int handle_delete(int client_socket) {
 * @return -1 if error
 */
 int handle_list_users(int client_socket) {
+    // get datetime from client socket
+    char datetime[DATETIME_SIZE];
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+    
     // get username from client
     char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -423,7 +476,6 @@ int handle_list_users(int client_socket) {
 
     // send userlist to client
     for (int i = 0; i < list_users_result.USERLIST_len + 100; i++) {
-        printf("SENDING %s\n", list_users_result.USERLIST_val[i].username);
         sleep(0.1);
         if (write(client_socket, list_users_result.USERLIST_val[i].username, USERNAME_SIZE) < 0) {
             perror("username write");
@@ -439,15 +491,21 @@ int handle_list_users(int client_socket) {
             perror("port write");
             return -1;
         }
-        printf("SENT %s\n", list_users_result.USERLIST_val[i].username);
     }
-    free(list_users_result.USERLIST_val);
 
-    printf("OPERATION FROM %s\n", username);
+    printf("%s\t%s\t%s\n", username, "LIST_USERS", datetime);
     return 0;
 }
 
 int handle_list_content(int client_socket) {
+
+    // get datetime from client socket
+    char datetime[DATETIME_SIZE];
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+    
     // get username from client
     char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -497,16 +555,14 @@ int handle_list_content(int client_socket) {
              perror("write");
              return -1;
          }
-        free(list_content_result.FILELIST_val[i].filename);
         sleep(0.1);
         if (write(client_socket, list_content_result.FILELIST_val[i].description, DESCRIPTION_SIZE) < 0) {
             perror("write");
             return -1;
         }
-        free(list_content_result.FILELIST_val[i].description);
     }
 
-    printf("OPERATION FROM %s\n", username);
+    printf("%s\t%s\t%s\n", username, "LIST_CONTENT", datetime);
     return 0;
 }
 
