@@ -362,9 +362,9 @@ int unregister_user(char username[USERNAME_SIZE]) {
 
     char line[USERNAME_SIZE];
     while (fgets(line, USERNAME_SIZE, users_file) != NULL) {
-        line[strlen(username)] = '\0';  // fgets includes \n in buffer, we don't want that
+        line[strlen(line)-1] = '\0';  // fgets includes \n in buffer, we don't want that
         if (strcmp(line, username) != 0) {
-            line[strlen(username)] = '\n';  // we need the \n back to put it into the input file
+            line[strlen(line)] = '\n';  // we need the \n back to put it into the input file
             fprintf(temp_users_file, "%s", line);
         }
     }

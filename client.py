@@ -11,6 +11,7 @@ import signal
 import zeep
 import requests
 
+
 # messages size in bytes
 EXECUTION_STATUS_SIZE = 1
 NUMBER_USERS_SIZE = 4
@@ -21,6 +22,7 @@ DESCRIPTION_SIZE = 256
 IP_ADDRESS_SIZE = 16
 PORT_SIZE = 6
 CLIENT_CONNECTIONS = 1
+WS_PORT = 8000
 
 
 class client:
@@ -45,7 +47,7 @@ class client:
     def __datetime(self) -> str:
         # CLIENT-WEB SERVER CONNECTION
         try:
-            client = zeep.Client("http://localhost:8000/?wsdl")
+            client = zeep.Client(f"http://localhost:{WS_PORT}/?wsdl")
             result = client.service.datetime()
             print(result)
             return result
@@ -495,7 +497,7 @@ class client:
         # GET DATETIME
         datetime = self.__datetime()
         if datetime == "":
-            print("LIST_USERS FAIL")
+            print("LIST_CONTENT FAIL")
             return client.RC.ERROR
 
         # CLIENT-SERVER CONNECTION
