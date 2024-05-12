@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "filemanager.h"
 
 #define OPERATION_SIZE 256
 #define EXECUTION_STATUS_SIZE 1
@@ -31,6 +32,8 @@ pthread_mutex_t files_folder_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t socket_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t socket_cond = PTHREAD_COND_INITIALIZER;
 int socket_copied = 0;
+
+CLIENT *clnt;  // RPC service client
 
 /**
 * @brief check program arguments
@@ -93,7 +96,7 @@ struct local_ip_info get_local_ip() {
 * @return 1 if exists, 0 otherwise
 * @return -1 if error
 */
-int check_username_existence(char username[USERNAME_SIZE]) {
+int check_username_existence(USERNAME username) {
     // open users.csv file
     pthread_mutex_lock(&users_file_lock);
     FILE *users_file = fopen(users_filename, "r");
@@ -128,7 +131,7 @@ int check_username_existence(char username[USERNAME_SIZE]) {
 * @return 1 if connected, 0 otherwise
 * @return -1 if error
 */
-int check_user_connection(char username[USERNAME_SIZE]) {
+int check_user_connection(USERNAME username) {
     // open connected file
     pthread_mutex_lock(&connected_file_lock);
     FILE *connected_file = fopen(connected_filename, "r");
@@ -164,8 +167,7 @@ int check_user_connection(char username[USERNAME_SIZE]) {
 * @return 1 if username already exists
 * @return -1 if error
 */
-int register_user(char username[USERNAME_SIZE]) {
-    
+int register_user(USERNAME username) {
     // check if username exists in users.csv
     int check_username_existence_rvalue = check_username_existence(username);
     if (check_username_existence_rvalue == 1) {
@@ -198,9 +200,15 @@ int register_user(char username[USERNAME_SIZE]) {
 * @return -1 if error
 */
 int handle_register(int client_socket) {
+    // get datetime from client socket
+    DATETIME datetime;
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
     
     // get username from client socket
-    char username[USERNAME_SIZE];
+    USERNAME username;
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
         perror("read");
         return -1;
@@ -221,6 +229,13 @@ int handle_register(int client_socket) {
         write(client_socket, "0", EXECUTION_STATUS_SIZE);
 
     printf("OPERATION FROM %s\n", username);
+        
+    // send info to RPC server
+    int rpc_server_result;
+    if (print_operation_1(username, "REGISTER", datetime, &rpc_server_result, clnt) < 0) {
+        clnt_perror(clnt, "list_content");
+    }
+    
     return 0;
 }
 
@@ -232,7 +247,7 @@ int handle_register(int client_socket) {
 * @return 2 if user is not connected
 * @return -1 if error
 */
-int disconnect_user(char username[USERNAME_SIZE]) {
+int disconnect_user(USERNAME username) {
     // check is user exists
     int check_username_existence_rvalue = check_username_existence(username);
     if (check_username_existence_rvalue == 0) {
@@ -297,9 +312,16 @@ int disconnect_user(char username[USERNAME_SIZE]) {
 * @return -1 if error
 */
 int handle_disconnect(int client_socket) {
+
+    // get datetime from client socket
+    DATETIME datetime;
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
     
     // get username from client socket
-    char username[USERNAME_SIZE];
+    USERNAME username;
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
         perror("read");
         return -1;
@@ -323,6 +345,13 @@ int handle_disconnect(int client_socket) {
         write(client_socket, "0", EXECUTION_STATUS_SIZE);
 
     printf("OPERATION FROM %s\n", username);
+        
+    // send info to RPC server
+    int rpc_server_result;
+    if (print_operation_1(username, "DISCONNECT", datetime, &rpc_server_result, clnt) < 0) {
+        clnt_perror(clnt, "list_content");
+    }
+    
     return 0;
 }
 
@@ -333,7 +362,7 @@ int handle_disconnect(int client_socket) {
 * @return 1 if username doesn't exist
 * @return -1 if error
 */
-int unregister_user(char username[USERNAME_SIZE]) {
+int unregister_user(USERNAME username) {
     // check if username exists
     int check_username_existence_rvalue = check_username_existence(username);
     if (check_username_existence_rvalue == 0) {
@@ -366,9 +395,9 @@ int unregister_user(char username[USERNAME_SIZE]) {
 
     char line[USERNAME_SIZE];
     while (fgets(line, USERNAME_SIZE, users_file) != NULL) {
-        line[strlen(line)-1] = '\0';  // fgets includes \n in buffer, we don't want that
+        line[strlen(username)] = '\0';  // fgets includes \n in buffer, we don't want that
         if (strcmp(line, username) != 0) {
-            line[strlen(line)] = '\n';  // we need the \n back to put it into the input file
+            line[strlen(username)] = '\n';  // we need the \n back to put it into the input file
             fprintf(temp_users_file, "%s", line);
         }
     }
@@ -390,9 +419,16 @@ int unregister_user(char username[USERNAME_SIZE]) {
 * @return -1 if error
 */
 int handle_unregister(int client_socket) {
+
+    // get datetime from client socket
+    DATETIME datetime;
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
     
     // get username from client socket
-    char username[USERNAME_SIZE];
+    USERNAME username;
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
         perror("read");
         return -1;
@@ -413,6 +449,13 @@ int handle_unregister(int client_socket) {
         write(client_socket, "0", EXECUTION_STATUS_SIZE);
     }
     printf("OPERATION FROM %s\n", username);
+        
+    // send info to RPC server
+    int rpc_server_result;
+    if (print_operation_1(username, "UNREGISTER", datetime, &rpc_server_result, clnt) < 0) {
+        clnt_perror(clnt, "list_content");
+    }
+    
     return 0;
 }
 
@@ -424,7 +467,7 @@ int handle_unregister(int client_socket) {
 * @return 1 if filename exists
 * @return 0 if filename doesn't exist
 */
-int check_published_file_existance(char username[USERNAME_SIZE], char filename[FILENAME_SIZE]) {
+int check_published_file_existance(USERNAME username, FILENAME filename) {
     // open username
     char *username_filename = malloc(strlen(files_foldername) + strlen(username) + 2);
     asprintf(&username_filename, "%s%s", files_foldername, username);
@@ -462,7 +505,7 @@ int check_published_file_existance(char username[USERNAME_SIZE], char filename[F
 * @param filename filename
 * @param description description
 */
-int publish_file(char username[USERNAME_SIZE], char filename[FILENAME_SIZE], char description[DESCRIPTION_SIZE]) {
+int publish_file(USERNAME username, FILENAME filename, char description[DESCRIPTION_SIZE]) {
     // check if user is registered
     int check_username_existence_rvalue = check_username_existence(username);
     if (check_username_existence_rvalue == 0) {
@@ -514,16 +557,23 @@ int publish_file(char username[USERNAME_SIZE], char filename[FILENAME_SIZE], cha
 * @return -1 if error
 */
 int handle_publish(int client_socket) {
+
+    // get datetime from client socket
+    DATETIME datetime;
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
     
     // get username from client socket
-    char username[USERNAME_SIZE];
+    USERNAME username;
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
         perror("read");
         return -1;
     }
 
     // get filename from client socket
-    char filename[FILENAME_SIZE];
+    FILENAME filename;
     if (read(client_socket, filename, FILENAME_SIZE) < 0) {
         perror("read");
         return -1;
@@ -558,6 +608,13 @@ int handle_publish(int client_socket) {
     }
 
     printf("OPERATION FROM %s\n", username);
+        
+    // send info to RPC server
+    int rpc_server_result;
+    if (print_file_operation_1(username, "PUBLISH", filename, datetime, &rpc_server_result, clnt) < 0) {
+        clnt_perror(clnt, "list_content");
+    }
+    
     return 0;
 }
 
@@ -569,7 +626,7 @@ int handle_publish(int client_socket) {
 * @return 2 if user is ubt already connected
 * @return -1 if error
 */
-int connect_user(char username[USERNAME_SIZE], char ip[IP_ADDRESS_SIZE], char port[PORT_SIZE]) {
+int connect_user(USERNAME username, char ip[IP_ADDRESS_SIZE], char port[PORT_SIZE]) {
     // check if user is registered
     int check_username_existence_rvalue = check_username_existence(username);
     if (check_username_existence_rvalue == 0) {
@@ -622,9 +679,16 @@ int connect_user(char username[USERNAME_SIZE], char ip[IP_ADDRESS_SIZE], char po
 * @return -1 if error
 */
 int handle_connect(int client_socket) {
+
+    // get datetime from client socket
+    DATETIME datetime;
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
     
     // get username from client socket
-    char username[USERNAME_SIZE];
+    USERNAME username;
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
         perror("read");
         return -1;
@@ -674,7 +738,13 @@ int handle_connect(int client_socket) {
     }
 
     printf("OPERATION FROM %s\n", username);
-
+        
+    // send info to RPC server
+    int rpc_server_result;
+    if (print_operation_1(username, "CONNECT", datetime, &rpc_server_result, clnt) < 0) {
+        clnt_perror(clnt, "list_content");
+    }
+    
     return 0;
 }
 
@@ -687,7 +757,8 @@ int handle_connect(int client_socket) {
 * @return 3 if the file has not been published by user
 * @return -1 if error
 */
-int delete(char username[USERNAME_SIZE], char filename[FILENAME_SIZE]) {
+int delete(USERNAME username, FILENAME filename) {
+
     // check if user exists
     int check_username_existence_rvalue = check_username_existence(username);
     if (check_username_existence_rvalue == 0) {
@@ -765,16 +836,23 @@ int delete(char username[USERNAME_SIZE], char filename[FILENAME_SIZE]) {
 * @return -1 if error
 */
 int handle_delete(int client_socket) {
+
+    // get datetime from client socket
+    DATETIME datetime;
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
     
     // get username from client
-    char username[USERNAME_SIZE];
+    USERNAME username;
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
         perror("read");
         return -1;
     }
 
     // get filename from client
-    char filename[FILENAME_SIZE];
+    FILENAME filename;
     if (read(client_socket, filename, FILENAME_SIZE) < 0) {
         perror("read");
         return -1;
@@ -799,12 +877,19 @@ int handle_delete(int client_socket) {
     }
 
     printf("OPERATION FROM %s\n", username);
+
+    // send info to RPC server
+    int rpc_server_result;
+    if (print_file_operation_1(username, "DELETE", filename, datetime, &rpc_server_result, clnt) < 0) {
+        clnt_perror(clnt, "list_content");
+    }
+
     return 0;
 }
 
 // user in connected.csv, with username, ip, port
 struct user {
-    char username[USERNAME_SIZE];
+    USERNAME username;
     char ip[IP_ADDRESS_SIZE];
     char port[PORT_SIZE];
 };
@@ -816,9 +901,16 @@ struct user {
 * @return -1 if error
 */
 int list_users(int client_socket) {
- 
+
+    // get datetime from client socket
+    DATETIME datetime;
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+    
     // get username from client
-    char username[USERNAME_SIZE];
+    USERNAME username;
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
         perror("read");
         return -1;
@@ -888,18 +980,31 @@ int list_users(int client_socket) {
     pthread_mutex_unlock(&connected_file_lock);
 
     printf("OPERATION FROM %s\n", username);
+
+    // send info to RPC server
+    int rpc_server_result;
+    if (print_operation_1(username, "LIST_USERS", datetime, &rpc_server_result, clnt) < 0) {
+        clnt_perror(clnt, "list_content");
+    }
+
     return 0;
 }
 
 struct file {
-    char filename[FILENAME_SIZE];
+    FILENAME filename;
     char description[DESCRIPTION_SIZE];
 };
 
 int list_content(int client_socket) {
+    // get datetime from client socket
+    DATETIME datetime;
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
 
     // get username from client
-    char username[USERNAME_SIZE];
+    USERNAME username;
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
         perror("read");
         return -1;
@@ -986,6 +1091,12 @@ int list_content(int client_socket) {
         write(client_socket, filelist[i].description, DESCRIPTION_SIZE);
     }
 
+    // send info to RPC server
+    int rpc_server_result;
+    if (print_operation_1(username, "LIST_CONTENT", datetime, &rpc_server_result, clnt) < 0) {
+        clnt_perror(clnt, "list_content");
+    }
+
     printf("OPERATION FROM %s\n", username);
     return 0;
 }
@@ -1011,11 +1122,7 @@ void petition_handler(void *client_socket) {
         pthread_exit(NULL);
     }
 
-    char datetime[DATETIME_SIZE];
-    if (read(socket, datetime, DATETIME_SIZE) < 0) {
-        perror("read");
-        pthread_exit(NULL);
-    }
+    printf("socket %d", socket);
 
     // handle petition, calling the specific handler
     if (strcmp(operation, "REGISTER") == 0) {
@@ -1145,26 +1252,28 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    // init mutexes and create thread
-    pthread_mutex_init(&users_file_lock, NULL);  // mutex to ensure users.csv is not a race condition
-    pthread_mutex_init(&connected_file_lock, NULL);  // mutex to ensure connected.csv is not a race condition
-    pthread_mutex_init(&files_folder_lock, NULL);  // mutex to ensure files folder is not a race condition
-    pthread_mutex_init(&socket_lock, NULL);  // mutex to ensure socket is not a race condition
-
+    // create thread for handling new connections
     pthread_attr_t threads_attr;
     pthread_attr_init(&threads_attr);
     pthread_attr_setdetachstate(&threads_attr, PTHREAD_CREATE_JOINABLE);
-    pthread_t thread;  // thread for handling new connections
+    pthread_t thread;
+
+    // initiate RPC client
+	clnt = clnt_create (server_ip.ip, filemanager, VERNUM, "tcp");
+	if (clnt == NULL) {
+		clnt_pcreateerror (server_ip.ip);
+		exit (1);
+	}
+
+    // listen for new connections (allocate memory for 5 requests at a time)
+    if (listen(server_socket, 5) < 0) {
+        perror("listen");
+        exit(1);
+    }
 
     while (1) {
         printf("s>");
         fflush(stdout);
-        
-        // listen for new connections
-        if (listen(server_socket, 5) < 0) {
-            perror("listen");
-            exit(1);
-        }
 
         // accept new connections
         int client_socket = accept(server_socket, NULL, NULL);
