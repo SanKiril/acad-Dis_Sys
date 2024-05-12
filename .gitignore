@@ -60,4 +60,5 @@ files/*
 __pycache__/
 __pycache__/*
 *.o
-filemanager*
+filemanager_*
+.vscode
