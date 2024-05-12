@@ -423,25 +423,25 @@ int handle_list_users(int client_socket) {
 
     // send userlist to client
     for (int i = 0; i < list_users_result.USERLIST_len + 100; i++) {
+        printf("SENDING %s\n", list_users_result.USERLIST_val[i].username);
         sleep(0.1);
         if (write(client_socket, list_users_result.USERLIST_val[i].username, USERNAME_SIZE) < 0) {
             perror("username write");
             return -1;
         }
-        free(list_users_result.USERLIST_val[i].username);
         sleep(0.1);
         if (write(client_socket, list_users_result.USERLIST_val[i].ip, IP_ADDRESS_SIZE) < 0) {
             perror("ip write");
             return -1;
         }
-        free(list_users_result.USERLIST_val[i].ip);
         sleep(0.1);
         if (write(client_socket, list_users_result.USERLIST_val[i].port, PORT_SIZE) < 0) {
             perror("port write");
             return -1;
         }
-        free(list_users_result.USERLIST_val[i].port);
+        printf("SENT %s\n", list_users_result.USERLIST_val[i].username);
     }
+    free(list_users_result.USERLIST_val);
 
     printf("OPERATION FROM %s\n", username);
     return 0;
@@ -515,8 +515,8 @@ int handle_list_content(int client_socket) {
 * @param client_socket client socket
 */
 void petition_handler(void *client_socket) {
-    // get petition from client socket
 
+    // copy socket to local variable
     if (socket_copied == 1)
         pthread_exit(NULL); 
     pthread_mutex_lock(&socket_lock);
@@ -525,6 +525,7 @@ void petition_handler(void *client_socket) {
     pthread_cond_signal(&socket_cond);
     pthread_mutex_unlock(&socket_lock);
 
+    // get petition from client socket
     char operation[OPERATION_SIZE];
     if (read(socket, operation, OPERATION_SIZE) < 0) {
         perror("read");
@@ -578,6 +579,7 @@ void petition_handler(void *client_socket) {
 void handle_sigint() {
     // delete socket mutex
     pthread_mutex_destroy(&socket_lock);
+    pthread_cond_destroy(&socket_cond);
 
     exit(0);
 }
@@ -670,15 +672,15 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
+    // listen for new connections
+    if (listen(server_socket, 5) < 0) {
+        perror("listen");
+        exit(1);
+    }
+
     while (1) {
         printf("s>");
         fflush(stdout);
-        
-        // listen for new connections
-        if (listen(server_socket, 5) < 0) {
-            perror("listen");
-            exit(1);
-        }
 
         // accept new connections
         int client_socket = accept(server_socket, NULL, NULL);
