@@ -201,14 +201,14 @@ int register_user(USERNAME username) {
 */
 int handle_register(int client_socket) {
     // get datetime from client socket
-    DATETIME datetime;
+    char datetime[DATETIME_SIZE];
     if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
         perror("read");
         return -1;
     }
     
     // get username from client socket
-    USERNAME username;
+    char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
         perror("read");
         return -1;
@@ -314,14 +314,14 @@ int disconnect_user(USERNAME username) {
 int handle_disconnect(int client_socket) {
 
     // get datetime from client socket
-    DATETIME datetime;
+    char datetime[DATETIME_SIZE];
     if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
         perror("read");
         return -1;
     }
     
     // get username from client socket
-    USERNAME username;
+    char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
         perror("read");
         return -1;
@@ -421,14 +421,14 @@ int unregister_user(USERNAME username) {
 int handle_unregister(int client_socket) {
 
     // get datetime from client socket
-    DATETIME datetime;
+    char datetime[DATETIME_SIZE];
     if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
         perror("read");
         return -1;
     }
     
     // get username from client socket
-    USERNAME username;
+    char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
         perror("read");
         return -1;
@@ -559,21 +559,21 @@ int publish_file(USERNAME username, FILENAME filename, char description[DESCRIPT
 int handle_publish(int client_socket) {
 
     // get datetime from client socket
-    DATETIME datetime;
+    char datetime[DATETIME_SIZE];
     if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
         perror("read");
         return -1;
     }
     
     // get username from client socket
-    USERNAME username;
+    char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
         perror("read");
         return -1;
     }
 
     // get filename from client socket
-    FILENAME filename;
+    char filename[FILENAME_SIZE];
     if (read(client_socket, filename, FILENAME_SIZE) < 0) {
         perror("read");
         return -1;
@@ -681,14 +681,14 @@ int connect_user(USERNAME username, char ip[IP_ADDRESS_SIZE], char port[PORT_SIZ
 int handle_connect(int client_socket) {
 
     // get datetime from client socket
-    DATETIME datetime;
+    char datetime[DATETIME_SIZE];
     if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
         perror("read");
         return -1;
     }
     
     // get username from client socket
-    USERNAME username;
+    char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
         perror("read");
         return -1;
@@ -838,21 +838,21 @@ int delete(USERNAME username, FILENAME filename) {
 int handle_delete(int client_socket) {
 
     // get datetime from client socket
-    DATETIME datetime;
+    char datetime[DATETIME_SIZE];
     if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
         perror("read");
         return -1;
     }
     
     // get username from client
-    USERNAME username;
+    char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
         perror("read");
         return -1;
     }
 
     // get filename from client
-    FILENAME filename;
+    char filename[FILENAME_SIZE];
     if (read(client_socket, filename, FILENAME_SIZE) < 0) {
         perror("read");
         return -1;
@@ -903,14 +903,14 @@ struct user {
 int list_users(int client_socket) {
 
     // get datetime from client socket
-    DATETIME datetime;
+    char datetime[DATETIME_SIZE];
     if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
         perror("read");
         return -1;
     }
     
     // get username from client
-    USERNAME username;
+    char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
         perror("read");
         return -1;
@@ -997,14 +997,14 @@ struct file {
 
 int list_content(int client_socket) {
     // get datetime from client socket
-    DATETIME datetime;
+    char datetime[DATETIME_SIZE];
     if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
         perror("read");
         return -1;
     }
 
     // get username from client
-    USERNAME username;
+    char username[USERNAME_SIZE];
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
         perror("read");
         return -1;
@@ -1121,8 +1121,6 @@ void petition_handler(void *client_socket) {
         perror("read");
         pthread_exit(NULL);
     }
-
-    printf("socket %d", socket);
 
     // handle petition, calling the specific handler
     if (strcmp(operation, "REGISTER") == 0) {
@@ -1272,7 +1270,7 @@ int main(int argc, char* argv[]) {
     }
 
     while (1) {
-        printf("s>");
+        printf("s> ");
         fflush(stdout);
 
         // accept new connections

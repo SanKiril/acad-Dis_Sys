@@ -6,7 +6,7 @@ SERVER_OBJECT = server.o
 # Define the executable
 SERVER = server
 
-SOCKET_SERVER = rpc_socket_server
+SOCKET_SERVER = server
 RPC_SERVER = rpc_server
 
 SOURCES.x = filemanager.x
@@ -20,7 +20,7 @@ OBJECTS_SVC = $(TARGETS_SVC.c:%.c=%.o)
 
 # Compiler flags 
 CPPFLAGS += -D_REENTRANT
-CFLAGS += -g 
+CFLAGS += -g -D_GNU_SOURCE
 LDLIBS += -lnsl -lpthread -I/usr/include/tirpc -ltirpc -I./rpc_files
 RPCGENFLAGS = -NM
 
