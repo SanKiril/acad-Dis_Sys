@@ -532,26 +532,68 @@ delete_file_1_svc(USERNAME username, FILENAME filename, int *result,  struct svc
     return TRUE;
 }
 
-bool_t
-list_users_1_svc(USERNAME username, struct list_users_rvalue *result,  struct svc_req *rqstp)
-{
+struct get_usernum_rvalue get_usernum_backend(USERNAME username) {
+    struct get_usernum_rvalue result;
     // check if username exists
     int check_username_existence_rvalue = check_username_existence(username);
     if (check_username_existence_rvalue == 0) {
-        result->execution_status = 1;
-        return TRUE;
+        result.execution_status = 1;
+        return result;
     } else if (check_username_existence_rvalue < 0) {
-        result->execution_status = 3;
-        return TRUE;
+        result.execution_status = 3;
+        return result;
     }
 
     // check if user is connected
     int check_user_connection_rvalue = check_user_connection(username);
     if (check_user_connection_rvalue == 0) {
-        result->execution_status = 2;
-        return TRUE;
+        result.execution_status = 2;
+        return result;
     } else if (check_user_connection_rvalue < 0) {
-        result->execution_status = 3;
+        result.execution_status = 3;
+        return result;
+    }
+
+    // open connected.csv
+    pthread_mutex_lock(&connected_file_lock);
+    FILE *connected_file = fopen(connected_filename, "r");
+    if (connected_file == NULL) {
+        perror("fopen");
+        result.execution_status = -1;
+        return result;
+    }
+
+    int usernum = 0;
+    char line[MAXLINE];
+
+    // get user's info from connected.csv
+    while (fgets(line, MAXLINE, connected_file) != 0) {
+        usernum ++;
+    }
+
+    fclose(connected_file);
+    pthread_mutex_unlock(&connected_file_lock);
+
+	result.usernum = usernum;
+    result.execution_status = 0;
+    return result;
+}
+
+bool_t
+get_usernum_1_svc(USERNAME username, struct get_usernum_rvalue *result,  struct svc_req *rqstp)
+{
+    struct get_usernum_rvalue backend_rvalue = get_usernum_backend(username);
+    result->execution_status = backend_rvalue.execution_status;
+    result->usernum = backend_rvalue.usernum;
+    return TRUE;
+}
+
+bool_t
+list_users_1_svc(USERNAME username, USERLIST *result,  struct svc_req *rqstp)
+{
+    struct get_usernum_rvalue backend_rvalue = get_usernum_backend(username);
+
+    if (backend_rvalue.execution_status != 0) {
         return TRUE;
     }
 
@@ -560,64 +602,107 @@ list_users_1_svc(USERNAME username, struct list_users_rvalue *result,  struct sv
     FILE *connected_file = fopen(connected_filename, "r");
     if (connected_file == NULL) {
         perror("fopen");
-        result->execution_status = -1;
         return TRUE;
     }
 
-    int usernum = 0;
     char line[MAXLINE];
+    result->USERLIST_len = backend_rvalue.usernum;
 
     // get user's info from connected.csv
+    int usernum = 0;
     while (fgets(line, MAXLINE, connected_file) != 0) {
-        result->user_list[usernum].username = malloc(MAXLINE);
-        result->user_list[usernum].username = strtok(line, ";");
-       result->user_list[usernum].ip = malloc(MAXLINE);
-        result->user_list[usernum].ip = strtok(NULL, ";");
-        result->user_list[usernum].port = malloc(MAXLINE);
-        result->user_list[usernum].port = strtok(NULL, ";");
-        usernum ++;
+        result->USERLIST_val[usernum].username = malloc(MAXLINE);
+        result->USERLIST_val[usernum].username = strtok(line, ";");
+        result->USERLIST_val[usernum].ip = malloc(MAXLINE);
+        result->USERLIST_val[usernum].ip = strtok(NULL, ";");
+        result->USERLIST_val[usernum].port = malloc(MAXLINE);
+        result->USERLIST_val[usernum].port = strtok(NULL, ";");
+        usernum++;
     }
-
-	result->usernum = usernum;
 
     fclose(connected_file);
     pthread_mutex_unlock(&connected_file_lock);
 
     printf("OPERATION FROM %s\n", username);
-    result->execution_status = 0;
     return TRUE;
 }
 
-bool_t
-list_content_1_svc(USERNAME username, USERNAME requested_username, struct list_content_rvalue *result,  struct svc_req *rqstp)
-{
+struct get_filenum_rvalue get_filenum_backend(USERNAME username, USERNAME requested_username) {
+    struct get_filenum_rvalue result;
     // check if username exists
     int check_username_existence_rvalue = check_username_existence(username);
     if (check_username_existence_rvalue == 0) {
-        result->execution_status = 1;
-        return TRUE;
+        result.execution_status = 1;
+        return result;
     } else if (check_username_existence_rvalue < 0) {
-        result->execution_status = 0;
-        return TRUE;
+        result.execution_status = 0;
+        return result;
     }
 
     // check if user is connected
     int check_user_connection_rvalue = check_user_connection(username);
     if (check_user_connection_rvalue == 0) {
-        result->execution_status = 2;
-        return TRUE;
+        result.execution_status = 2;
+        return result;
     } else if (check_user_connection_rvalue < 0) {
-        result->execution_status = 3;
-        return TRUE;
+        result.execution_status = 3;
+        return result;
     }
 
     // check requested username is connected
     int check_requested_user_connection_rvalue = check_user_connection(requested_username);
     if (check_requested_user_connection_rvalue == 0) {
-        result->execution_status = 2;
-        return TRUE;
+        result.execution_status = 2;
+        return result;
     } else if (check_requested_user_connection_rvalue < 0) {
-        result->execution_status = 3;
+        result.execution_status = 3;
+        return result;
+    }
+
+    // open username file
+    char *username_filename = malloc(strlen(files_foldername) + strlen(requested_username) + 2);
+    asprintf(&username_filename, "%s%s", files_foldername, requested_username);
+    pthread_mutex_lock(&files_folder_lock);
+    FILE *username_file = fopen(username_filename, "r");
+    free(username_filename);
+    if (username_file == NULL) {
+        perror("fopen");
+        result.execution_status = -1;
+        return result;
+    }
+
+	int filenum;
+    // get files from username file
+    char line[MAXLINE];
+    while (fgets(line, MAXLINE, username_file) != 0) {
+        if ((strcmp(line, "\n") == 0) || (strcmp(line, "") == 0)) {
+            break;
+        }
+        filenum += 1;
+    }
+	result.filenum = filenum; 
+    result.execution_status = 0;
+    fclose(username_file);
+    pthread_mutex_unlock(&files_folder_lock);
+
+    return result;
+}
+
+bool_t
+get_filenum_1_svc(USERNAME username, USERNAME requested_username, struct get_filenum_rvalue *result,  struct svc_req *rqstp)
+{
+    struct get_filenum_rvalue backend_rvalue = get_filenum_backend(username, requested_username);
+    result->execution_status = backend_rvalue.execution_status;
+    result->filenum = backend_rvalue.filenum;
+    return TRUE;
+}
+
+bool_t
+list_content_1_svc(USERNAME username, USERNAME requested_username, FILELIST *result,  struct svc_req *rqstp)
+{
+    struct get_filenum_rvalue backend_rvalue = get_filenum_backend(username, requested_username);
+
+    if (backend_rvalue.execution_status != 0) {
         return TRUE;
     }
 
@@ -629,28 +714,27 @@ list_content_1_svc(USERNAME username, USERNAME requested_username, struct list_c
     free(username_filename);
     if (username_file == NULL) {
         perror("fopen");
-        result->execution_status = -1;
         return TRUE;
     }
 
 	int filenum;
+    result->FILELIST_len = backend_rvalue.filenum;
     // get files from username file
     char line[MAXLINE];
     while (fgets(line, MAXLINE, username_file) != 0) {
         if ((strcmp(line, "\n") == 0) || (strcmp(line, "") == 0)) {
             break;
         }
-        strcpy(result->file_list[filenum].filename, strtok(line, ";"));
-        strcpy(result->file_list[filenum].description, strtok(NULL, ";"));
-        filenum += 1;
+        result -> FILELIST_val[filenum].filename = malloc(MAXLINE);
+        result -> FILELIST_val[filenum].filename = strtok(line, ";");
+        result -> FILELIST_val[filenum].description = malloc(MAXLINE);
+        result -> FILELIST_val[filenum].description = strtok(NULL, ";");
     }
-	result->filenum = filenum; 
 
     fclose(username_file);
     pthread_mutex_unlock(&files_folder_lock);
 
     printf("OPERATION FROM %s\n", username);
-    result->execution_status = 0;
     return TRUE;
 }
 

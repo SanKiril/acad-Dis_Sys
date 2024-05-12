@@ -5,8 +5,10 @@ const UNREGISTERVER = 3;
 const PUBLISHVER = 4;
 const CONNECTVER = 5;
 const DELETEVER = 6;
-const LISTUSERSVER = 7;
-const LISTCONTENTVER = 8;
+const GETUSERNUMVER = 7;
+const LISTUSERSVER = 8;
+const GETFILENUMVER = 9;
+const LISTCONTENTVER = 10;
 
 const OPERATION_SIZE = 256;
 const EXECUTION_STATUS_SIZE = 1;
@@ -21,11 +23,11 @@ const MAX_USERS = 100;
 const MAX_FILES = 100;
 const MAXLINE = 4096;
 
-typedef string USERNAME<256>;
-typedef string FILENAME<256>;
-typedef string DESCRIPTION<256>;
-typedef string IP_ADDRESS<16>;
-typedef string PORT<6>;
+typedef string USERNAME<USERNAME_SIZE>;
+typedef string FILENAME<FILENAME_SIZE>;
+typedef string DESCRIPTION<DESCRIPTION_SIZE>;
+typedef string IP_ADDRESS<IP_ADDRESS_SIZE>;
+typedef string PORT<PORT_SIZE>;
 
 struct user {
     USERNAME username;
@@ -38,17 +40,19 @@ struct file{
     DESCRIPTION description;
 };
 
-struct list_users_rvalue {
+struct get_usernum_rvalue {
     int execution_status;
     int usernum;
-    struct user user_list[MAX_USERS];
 };
 
-struct list_content_rvalue {
+typedef struct user USERLIST<MAX_USERS>;
+
+struct get_filenum_rvalue {
     int execution_status;
     int filenum;
-    struct file file_list[MAX_FILES];
 };
+
+typedef struct file FILELIST<MAX_FILES>;
 
 program filemanager {
     version VERNUM {
@@ -58,7 +62,9 @@ program filemanager {
         int publish_file(USERNAME username, FILENAME filename, DESCRIPTION description) = PUBLISHVER;
         int connect_user(USERNAME username, IP_ADDRESS ip, PORT port) = CONNECTVER;
         int delete_file(USERNAME username, FILENAME filename) = DELETEVER;
-        struct list_users_rvalue list_users(USERNAME username) = LISTUSERSVER;
-        struct list_content_rvalue list_content(USERNAME username, USERNAME requested_username) = LISTCONTENTVER;
+        struct get_usernum_rvalue get_usernum(USERNAME username) = GETUSERNUMVER;
+        USERLIST list_users(USERNAME username) = LISTUSERSVER;
+        struct get_filenum_rvalue get_filenum(USERNAME username, USERNAME requested_username) = GETFILENUMVER;
+        FILELIST list_content(USERNAME username, USERNAME requested_username) = LISTCONTENTVER;
     } = 1;
 } = 1;

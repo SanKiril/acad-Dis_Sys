@@ -388,7 +388,6 @@ class client:
                     print("LIST_USERS FAIL")
                     return client.RC.ERROR
         except (socket.error, ConnectionRefusedError, ValueError):
-            print("LIST_USERS FAIL")
             return client.RC.ERROR
 
     def listcontent(self, username: str) -> int:

@@ -384,40 +384,64 @@ int handle_list_users(int client_socket) {
         return -1;
     }
 
-    // attempt to do list_users action
-    struct list_users_rvalue list_users_result;
-    if (list_users_1(username, &list_users_result, rpc_client) != RPC_SUCCESS) {
+    // attempt to do get_usernum action
+    struct get_usernum_rvalue get_usernum_result;
+    if (get_usernum_1(username, &get_usernum_result, rpc_client) != RPC_SUCCESS) {
         clnt_perror(rpc_client, "Call failed");
         return -1;
     }
 
-    // send execution code to client and break if list_users wasn't successful
-    write(client_socket, (char *)&list_users_result.execution_status, EXECUTION_STATUS_SIZE);
-    if (list_users_result.execution_status < 0) {
+    // send execution code to client and break if get_usernum wasn't successful
+    char *execution_status_str;
+    asprintf(&execution_status_str, "%d", get_usernum_result.execution_status);
+    sleep(0.1);
+    if (write(client_socket, execution_status_str, strlen(execution_status_str)) < 0) {
+        perror("write");
         return -1;
-    } else if (list_users_result.execution_status != 0) {
+    }
+    if (get_usernum_result.execution_status < 0) {
+        return -1;
+    } else if (get_usernum_result.execution_status != 0) {
         return 0;
     }
 
     // send usernum to client
     char *usernum_str;
-    asprintf(&usernum_str, "%d", list_users_result.usernum);
+    asprintf(&usernum_str, "%d", get_usernum_result.usernum);
     sleep(0.1);
-    write(client_socket, usernum_str, strlen(usernum_str));
-
-    // send userlist to client
-    for (int i = 0; i < list_users_result.usernum; i++) {
-        sleep(0.1);
-        write(client_socket,list_users_result. user_list[i].username, USERNAME_SIZE);
-        free(list_users_result.user_list[i].username);
-        sleep(0.1);
-        write(client_socket, list_users_result.user_list[i].ip, IP_ADDRESS_SIZE);
-        free(list_users_result.user_list[i].ip);
-        sleep(0.1);
-        write(client_socket, list_users_result.user_list[i].port, PORT_SIZE);
-        free(list_users_result.user_list[i].port);
+    if (write(client_socket, usernum_str, strlen(usernum_str)) < 0) {
+        perror("write");
+        return -1;
     }
 
+    // attempt to do list_users action
+    USERLIST list_users_result;
+    if (list_users_1(username, &list_users_result, rpc_client) != RPC_SUCCESS) {
+        clnt_perror(rpc_client, "Call failed");
+        return -1;
+    }
+
+    // send userlist to client
+    for (int i = 0; i < list_users_result.USERLIST_len + 100; i++) {
+        sleep(0.1);
+        if (write(client_socket, list_users_result.USERLIST_val[i].username, USERNAME_SIZE) < 0) {
+            perror("username write");
+            return -1;
+        }
+        free(list_users_result.USERLIST_val[i].username);
+        sleep(0.1);
+        if (write(client_socket, list_users_result.USERLIST_val[i].ip, IP_ADDRESS_SIZE) < 0) {
+            perror("ip write");
+            return -1;
+        }
+        free(list_users_result.USERLIST_val[i].ip);
+        sleep(0.1);
+        if (write(client_socket, list_users_result.USERLIST_val[i].port, PORT_SIZE) < 0) {
+            perror("port write");
+            return -1;
+        }
+        free(list_users_result.USERLIST_val[i].port);
+    }
 
     printf("OPERATION FROM %s\n", username);
     return 0;
@@ -438,33 +462,48 @@ int handle_list_content(int client_socket) {
         return -1;
     }
 
-    // attempt to do list_content action
-    struct list_content_rvalue list_content_result;
-    if (list_content_1(username, requested_username, &list_content_result, rpc_client) != RPC_SUCCESS) {
+    // attempt to do get_filenum action
+    struct get_filenum_rvalue get_filenum_result;
+    if (get_filenum_1(username, requested_username, &get_filenum_result, rpc_client) != RPC_SUCCESS) {
         clnt_perror(rpc_client, "Call failed");
         return -1;
     }
 
-    // send execution code to client and break execution if list_content wasn't successful
-    write(client_socket, (char *)&list_content_result.execution_status, EXECUTION_STATUS_SIZE);
-    if (list_content_result.execution_status < 0) {
+    // send execution code to client and break if get_filenum wasn't successful
+    write(client_socket, (char *)&get_filenum_result.execution_status, EXECUTION_STATUS_SIZE);
+    if (get_filenum_result.execution_status < 0) {
         return -1;
-    } else if (list_content_result.execution_status != 0) {
+    } else if (get_filenum_result.execution_status != 0) {
         return 0;
     }
 
     // send filenum to client
     char *filenum_str;
-    asprintf(&filenum_str, "%d", list_content_result.filenum);
+    asprintf(&filenum_str, "%d", get_filenum_result.filenum);
     sleep(0.1);
     write(client_socket, filenum_str, strlen(filenum_str));
 
+    // attempt to do list_content action
+    FILELIST list_content_result;
+    if (list_content_1(username, requested_username, &list_content_result, rpc_client) != RPC_SUCCESS) {
+        clnt_perror(rpc_client, "Call failed");
+        return -1;
+    }
+
     // send filelist to client
-    for (int i = 0; i < list_content_result.filenum; i++) {
+    for (int i = 0; i < list_content_result.FILELIST_len; i++) {
         sleep(0.1);
-        write(client_socket, list_content_result.file_list[i].filename, FILENAME_SIZE);
+         if (write(client_socket, list_content_result.FILELIST_val[i].filename, FILENAME_SIZE) < 0) {
+             perror("write");
+             return -1;
+         }
+        free(list_content_result.FILELIST_val[i].filename);
         sleep(0.1);
-        write(client_socket, list_content_result.file_list[i].description, DESCRIPTION_SIZE);
+        if (write(client_socket, list_content_result.FILELIST_val[i].description, DESCRIPTION_SIZE) < 0) {
+            perror("write");
+            return -1;
+        }
+        free(list_content_result.FILELIST_val[i].description);
     }
 
     printf("OPERATION FROM %s\n", username);
@@ -658,7 +697,7 @@ int main(int argc, char* argv[]) {
         while (socket_copied == 0)
             pthread_cond_wait(&socket_cond, &socket_lock);
         pthread_mutex_unlock(&socket_lock);
-
+        
         // ensure the system knows that the thread can be cleaned up automatically without the server waiting
         if (pthread_join(thread, NULL) < 0) {
             // doing this for good practice, pthread_join on a detached thread always returns success

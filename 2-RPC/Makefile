@@ -1,4 +1,4 @@
-
+RPC = rpcgen
 
 SOCKET_SERVER = server
 RPC_SERVER = rpc_server
@@ -11,8 +11,8 @@ TARGETS = filemanager.h filemanager_xdr.c filemanager_clnt.c filemanager_svc.c f
 
 OBJECTS_CLNT = $(TARGETS_CLNT.c:%.c=%.o)
 OBJECTS_SVC = $(TARGETS_SVC.c:%.c=%.o)
-# Compiler flags 
 
+# Compiler flags 
 CPPFLAGS += -D_REENTRANT
 CFLAGS += -g 
 LDLIBS += -lnsl -lpthread -I/usr/include/tirpc -ltirpc
@@ -28,6 +28,15 @@ all:
 	@make -s $(RPC_SERVER)
 	@echo "Compiled rpc server"
 
+.SECONDARY: $(OBJECTS_CLNT) $(OBJECTS_SVC)
+
+$(OBJECTS_CLNT): %.o: %.c
+	$(LINK.c) $(LDLIBS) -c $< -o $@
+
+$(filter-out filemanager_xdr.o,$(OBJECTS_SVC)): %.o: %.c
+	$(LINK.c) $(LDLIBS) -c $< -o $@
+
+$(RPC): $(TARGETS)
 $(TARGETS) : $(SOURCES.x) 
 	rpcgen $(RPCGENFLAGS) $(SOURCES.x)
 
