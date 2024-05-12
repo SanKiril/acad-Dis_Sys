@@ -8,6 +8,8 @@ import errno
 import io
 from time import sleep
 import signal
+import zeep
+import requests
 
 # messages size in bytes
 EXECUTION_STATUS_SIZE = 1
@@ -40,9 +42,25 @@ class client:
     _port = -1
 
     # ******************** METHODS *******************
+    def __datetime(self) -> str:
+        # CLIENT-WEB SERVER CONNECTION
+        try:
+            client = zeep.Client("http://localhost:8000/?wsdl")
+            result = client.service.datetime()
+            print(result)
+            return result
+        except (zeep.exceptions.Fault, zeep.exceptions.ValidationError, requests.exceptions.ConnectionError):
+            return ""
+
     def register(self, username: str) -> int:
         # INPUT VALIDATION
         if " " in username or len(username) > USERNAME_SIZE:
+            print("REGISTER FAIL")
+            return client.RC.ERROR
+        
+        # GET DATETIME
+        datetime = self.__datetime()
+        if datetime == "":
             print("REGISTER FAIL")
             return client.RC.ERROR
 
@@ -53,6 +71,8 @@ class client:
 
                 # SEND REQUEST TO SERVER
                 client_socket.sendall("REGISTER\0".encode())  # REGISTER ...
+                sleep(0.1)
+                client_socket.sendall(f"{datetime}\0".encode())  # ... Datetime ...
                 sleep(0.1)
                 client_socket.sendall(f"{username}\0".encode())  # ... <username>
 
@@ -79,6 +99,12 @@ class client:
         if " " in username or len(username) > USERNAME_SIZE:
             print("UNREGISTER FAIL")
             return client.RC.ERROR
+        
+        # GET DATETIME
+        datetime = self.__datetime()
+        if datetime == "":
+            print("UNREGISTER FAIL")
+            return client.RC.ERROR
 
         # CLIENT-SERVER CONNECTION
         try:
@@ -87,6 +113,8 @@ class client:
 
                 # SEND REQUEST TO SERVER
                 client_socket.sendall("UNREGISTER\0".encode())  # UNREGISTER ...
+                sleep(0.1)
+                client_socket.sendall(f"{datetime}\0".encode())  # ... Datetime ...
                 sleep(0.1)
                 client_socket.sendall(f"{username}\0".encode())  # ... <username>
 
@@ -108,7 +136,7 @@ class client:
             print("UNREGISTER FAIL")
             return client.RC.ERROR
     
-    def __share_file(self) -> int:
+    def __sharefile(self) -> int:
         try:
             self.__server_socket.listen(CLIENT_CONNECTIONS)  # connections at a time
             while self.__server_socket is not None and self.__server_thread is not None:
@@ -136,31 +164,26 @@ class client:
                                             if not data:
                                                 break
                                             client_socket.sendall(data)
-                                    return client.RC.OK
                                 else:
                                     client_socket.sendall("1".encode())  # "1"
-                                    return client.RC.USER_ERROR
                             except (FileNotFoundError, IOError, json.JSONDecodeError):
                                 client_socket.sendall("1".encode())  # "1"
-                                return client.RC.USER_ERROR
                         else:
                             client_socket.sendall("2".encode())  # "2"
-                            return client.RC.ERROR
-                except socket.error as e:
-                    if e.errno == errno.EINTR:  # Interrupted system call
-                        self.__server_thread.join()
-                        self.__server_thread = None
-                        return client.RC.ERROR
-                    elif e.errno == errno.EWOULDBLOCK:  # Resource temporarily unavailable
-                        continue
-                    else:
-                        return client.RC.ERROR
+                except socket.error:
+                    continue
         except (socket.error):
             return client.RC.ERROR
     
     def connect(self, username: str) -> int:
         # INPUT VALIDATION
         if " " in username or len(username) > USERNAME_SIZE:
+            print("CONNECT FAIL")
+            return client.RC.ERROR
+        
+        # GET DATETIME
+        datetime = self.__datetime()
+        if datetime == "":
             print("CONNECT FAIL")
             return client.RC.ERROR
 
@@ -175,7 +198,7 @@ class client:
                 port = self.__server_socket.getsockname()[1]
 
                 # CREATE THREAD TO LISTEN FOR REQUESTS
-                self.__server_thread = threading.Thread(target=self.__share_file)
+                self.__server_thread = threading.Thread(target=self.__sharefile)
                 self.__server_thread.start()
             except (socket.error):
                 print("CONNECT FAIL")
@@ -191,6 +214,8 @@ class client:
 
                 # SEND REQUEST TO SERVER
                 client_socket.sendall("CONNECT\0".encode())  # CONNECT ...
+                sleep(0.1)
+                client_socket.sendall(f"{datetime}\0".encode())  # ... Datetime ...
                 sleep(0.1)
                 client_socket.sendall(f"{username}\0".encode())  # ... <username> ...
                 sleep(0.1)
@@ -210,7 +235,7 @@ class client:
                     print("CONNECT FAIL, USER ALREADY CONNECTED")
                     return client.RC.USER_ERROR
                 else:
-                    print(f"CONNECT FAIL ({response})")
+                    print("CONNECT FAIL")
                     return client.RC.ERROR
         except (socket.error, ConnectionRefusedError):
             print("CONNECT FAIL")
@@ -219,6 +244,12 @@ class client:
     def disconnect(self, username: str) -> int:
         # INPUT VALIDATION
         if " " in username or len(username) > USERNAME_SIZE:
+            print("DISCONNECT FAIL")
+            return client.RC.ERROR
+        
+        # GET DATETIME
+        datetime = self.__datetime()
+        if datetime == "":
             print("DISCONNECT FAIL")
             return client.RC.ERROR
 
@@ -240,6 +271,8 @@ class client:
 
                 # SEND REQUEST TO SERVER
                 client_socket.sendall("DISCONNECT\0".encode())  # DISCONNECT ...
+                sleep(0.1)
+                client_socket.sendall(f"{datetime}\0".encode())  # ... Datetime ...
                 sleep(0.1)
                 client_socket.sendall(f"{username}\0".encode())  # ... <username>
 
@@ -271,6 +304,12 @@ class client:
         if len(description) > DESCRIPTION_SIZE:
             print("PUBLISH FAIL")
             return client.RC.ERROR
+        
+        # GET DATETIME
+        datetime = self.__datetime()
+        if datetime == "":
+            print("PUBLISH FAIL")
+            return client.RC.ERROR
 
         # CLIENT-SERVER CONNECTION
         try:
@@ -279,6 +318,8 @@ class client:
 
                 # SEND REQUEST TO SERVER
                 client_socket.sendall("PUBLISH\0".encode())  # PUBLISH ...
+                sleep(0.1)
+                client_socket.sendall(f"{datetime}\0".encode())  # ... Datetime ...
                 sleep(0.1)
                 client_socket.sendall(f"{self.__username}\0".encode())  # ... Username ...
                 sleep(0.1)
@@ -291,18 +332,17 @@ class client:
 
                 # CHECK RESPONSE FROM SERVER
                 if response == '0':
+                    # ADD PUBLIHED FILE
                     try:
-                        # ADD PUBLIHED FILE
                         with open(f"published-{self.__username}.json", "r") as file:  # read from published files
                             published = json.load(file)
-                        published.append({"Filename": filename, "Description": description})  # update published files
-                        with open(f"published-{self.__username}.json", "w") as file:  # write to published files
-                            json.dump(published, file, indent=4)
-                        print("PUBLISH OK")
-                        return client.RC.OK
                     except (FileNotFoundError, json.JSONDecodeError):
-                        print("DELETE FAIL")
-                        return client.RC.ERROR
+                        published = []
+                    published.append({"Filename": filename, "Description": description})  # update published files
+                    with open(f"published-{self.__username}.json", "w") as file:  # write to published files
+                        json.dump(published, file, indent=4)
+                    print("PUBLISH OK")
+                    return client.RC.OK
                 elif response == '1':
                     print("PUBLISH FAIL, USER DOES NOT EXIST")
                     return client.RC.USER_ERROR
@@ -324,6 +364,12 @@ class client:
         if " " in filename or len(filename) > FILENAME_SIZE:
             print("DELETE FAIL")
             return client.RC.ERROR
+        
+        # GET DATETIME
+        datetime = self.__datetime()
+        if datetime == "":
+            print("DELETE FAIL")
+            return client.RC.ERROR
 
         # CLIENT-SERVER CONNECTION
         try:
@@ -332,6 +378,8 @@ class client:
 
                 # SEND REQUEST TO SERVER
                 client_socket.sendall("DELETE\0".encode())  # DELETE ...
+                sleep(0.1)
+                client_socket.sendall(f"{datetime}\0".encode())  # ... Datetime ...
                 sleep(0.1)
                 client_socket.sendall(f"{self.__username}\0".encode())  # ... Username ...
                 sleep(0.1)
@@ -353,7 +401,7 @@ class client:
                             published = json.load(file)
                         for file in published:
                             if file["Filename"] == filename:
-                                del file  # update published files
+                                del published[published.index(file)]  # update published files
                                 break
                         with open(f"published-{self.__username}.json", "w") as file:  # write to published files
                             json.dump(published, file, indent=4)
@@ -379,6 +427,12 @@ class client:
             return client.RC.ERROR
 
     def listusers(self) -> int:
+        # GET DATETIME
+        datetime = self.__datetime()
+        if datetime == "":
+            print("LIST_USERS FAIL")
+            return client.RC.ERROR
+        
         # CLIENT-SERVER CONNECTION
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
@@ -386,6 +440,8 @@ class client:
 
                 # SEND REQUEST TO SERVER
                 client_socket.sendall("LIST_USERS\0".encode())  # LIST_USERS ...
+                sleep(0.1)
+                client_socket.sendall(f"{datetime}\0".encode())  # ... Datetime ...
                 sleep(0.1)
                 client_socket.sendall(f"{self.__username}\0".encode())  # ... Username
 
@@ -435,6 +491,12 @@ class client:
         if " " in username or len(username) > USERNAME_SIZE:
             print("LIST_CONTENT FAIL")
             return client.RC.ERROR
+        
+        # GET DATETIME
+        datetime = self.__datetime()
+        if datetime == "":
+            print("LIST_USERS FAIL")
+            return client.RC.ERROR
 
         # CLIENT-SERVER CONNECTION
         try:
@@ -443,6 +505,8 @@ class client:
 
                 # SEND REQUEST TO SERVER
                 client_socket.sendall("LIST_CONTENT\0".encode())  # LIST_CONTENT ...
+                sleep(0.1)
+                client_socket.sendall(f"{datetime}\0".encode())  # ... Datetime ...
                 sleep(0.1)
                 client_socket.sendall(f"{self.__username}\0".encode())  # ... Username ...
                 sleep(0.1)
