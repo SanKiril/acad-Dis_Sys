@@ -200,6 +200,13 @@ int register_user(USERNAME username) {
 * @return -1 if error
 */
 int handle_register(int client_socket) {
+    // get datetime from client socket
+    DATETIME datetime;
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+    
     // get username from client socket
     USERNAME username;
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -222,6 +229,13 @@ int handle_register(int client_socket) {
         write(client_socket, "0", EXECUTION_STATUS_SIZE);
 
     printf("OPERATION FROM %s\n", username);
+        
+    // send info to RPC server
+    int rpc_server_result;
+    if (print_operation_1(username, "REGISTER", datetime, &rpc_server_result, clnt) < 0) {
+        clnt_perror(clnt, "list_content");
+    }
+    
     return 0;
 }
 
@@ -298,6 +312,14 @@ int disconnect_user(USERNAME username) {
 * @return -1 if error
 */
 int handle_disconnect(int client_socket) {
+
+    // get datetime from client socket
+    DATETIME datetime;
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+    
     // get username from client socket
     USERNAME username;
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -323,6 +345,13 @@ int handle_disconnect(int client_socket) {
         write(client_socket, "0", EXECUTION_STATUS_SIZE);
 
     printf("OPERATION FROM %s\n", username);
+        
+    // send info to RPC server
+    int rpc_server_result;
+    if (print_operation_1(username, "DISCONNECT", datetime, &rpc_server_result, clnt) < 0) {
+        clnt_perror(clnt, "list_content");
+    }
+    
     return 0;
 }
 
@@ -390,6 +419,14 @@ int unregister_user(USERNAME username) {
 * @return -1 if error
 */
 int handle_unregister(int client_socket) {
+
+    // get datetime from client socket
+    DATETIME datetime;
+    if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
+        perror("read");
+        return -1;
+    }
+    
     // get username from client socket
     USERNAME username;
     if (read(client_socket, username, USERNAME_SIZE) < 0) {
@@ -412,6 +449,13 @@ int handle_unregister(int client_socket) {
         write(client_socket, "0", EXECUTION_STATUS_SIZE);
     }
     printf("OPERATION FROM %s\n", username);
+        
+    // send info to RPC server
+    int rpc_server_result;
+    if (print_operation_1(username, "UNREGISTER", datetime, &rpc_server_result, clnt) < 0) {
+        clnt_perror(clnt, "list_content");
+    }
+    
     return 0;
 }
 
@@ -1072,11 +1116,13 @@ void petition_handler(void *client_socket) {
     pthread_cond_signal(&socket_cond);
     pthread_mutex_unlock(&socket_lock);
 
-    OPERATION operation;
+    char operation[OPERATION_SIZE];
     if (read(socket, operation, OPERATION_SIZE) < 0) {
         perror("read");
         pthread_exit(NULL);
     }
+
+    printf("socket %d", socket);
 
     // handle petition, calling the specific handler
     if (strcmp(operation, "REGISTER") == 0) {
