@@ -964,18 +964,21 @@ int list_users(int client_socket) {
         sleep(0.1);
         if (write(client_socket, userlist[i].username, USERNAME_SIZE) < 0) {
             perror("write");
+            fclose(connected_file);
             pthread_mutex_unlock(&connected_file_lock);
             return -1;
         }
         sleep(0.1);
         if (write(client_socket, userlist[i].ip, IP_ADDRESS_SIZE) < 0) {
             perror("write");
+            fclose(connected_file);
             pthread_mutex_unlock(&connected_file_lock);
             return -1;
         }
         sleep(0.1);
         if (write(client_socket, userlist[i].port, PORT_SIZE) < 0) {
             perror("write");
+            fclose(connected_file);
             pthread_mutex_unlock(&connected_file_lock);
             return -1;
         }
@@ -1090,12 +1093,14 @@ int list_content(int client_socket) {
         sleep(0.1);
         if (write(client_socket, filelist[i].filename, FILENAME_SIZE) < 0) {
             perror("write");
+            fclose(username_file);
             pthread_mutex_unlock(&files_folder_lock);
             return -1;
         }
         sleep(0.1);
         if (write(client_socket, filelist[i].description, DESCRIPTION_SIZE) < 0) {
             perror("write");
+            fclose(username_file);
             pthread_mutex_unlock(&files_folder_lock);
             return -1;
         }
