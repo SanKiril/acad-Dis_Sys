@@ -312,7 +312,6 @@ int disconnect_user(USERNAME username) {
 * @return -1 if error
 */
 int handle_disconnect(int client_socket) {
-
     // get datetime from client socket
     char datetime[DATETIME_SIZE];
     if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
@@ -419,7 +418,6 @@ int unregister_user(USERNAME username) {
 * @return -1 if error
 */
 int handle_unregister(int client_socket) {
-
     // get datetime from client socket
     char datetime[DATETIME_SIZE];
     if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
@@ -557,7 +555,6 @@ int publish_file(USERNAME username, FILENAME filename, char description[DESCRIPT
 * @return -1 if error
 */
 int handle_publish(int client_socket) {
-
     // get datetime from client socket
     char datetime[DATETIME_SIZE];
     if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
@@ -679,7 +676,6 @@ int connect_user(USERNAME username, char ip[IP_ADDRESS_SIZE], char port[PORT_SIZ
 * @return -1 if error
 */
 int handle_connect(int client_socket) {
-
     // get datetime from client socket
     char datetime[DATETIME_SIZE];
     if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
@@ -758,7 +754,6 @@ int handle_connect(int client_socket) {
 * @return -1 if error
 */
 int delete(USERNAME username, FILENAME filename) {
-
     // check if user exists
     int check_username_existence_rvalue = check_username_existence(username);
     if (check_username_existence_rvalue == 0) {
@@ -836,7 +831,6 @@ int delete(USERNAME username, FILENAME filename) {
 * @return -1 if error
 */
 int handle_delete(int client_socket) {
-
     // get datetime from client socket
     char datetime[DATETIME_SIZE];
     if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
@@ -889,7 +883,7 @@ int handle_delete(int client_socket) {
 
 // user in connected.csv, with username, ip, port
 struct user {
-    USERNAME username;
+    char username[USERNAME_SIZE];
     char ip[IP_ADDRESS_SIZE];
     char port[PORT_SIZE];
 };
@@ -901,7 +895,6 @@ struct user {
 * @return -1 if error
 */
 int list_users(int client_socket) {
-
     // get datetime from client socket
     char datetime[DATETIME_SIZE];
     if (read(client_socket, datetime, DATETIME_SIZE) < 0) {
@@ -991,7 +984,7 @@ int list_users(int client_socket) {
 }
 
 struct file {
-    FILENAME filename;
+    char filename[FILENAME_SIZE];
     char description[DESCRIPTION_SIZE];
 };
 

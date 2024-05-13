@@ -578,7 +578,7 @@ class client:
         # CLIENT-CLIENT CONNECTION
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-                client_socket.connect((user_info["IP address"], user_info["Port"]))
+                client_socket.connect((user_info["IP address"], int(user_info["Port"])))
 
                 # SEND REQUEST TO CLIENT
                 client_socket.sendall("GET_FILE\0".encode())  # GET_FILE ...
@@ -586,7 +586,7 @@ class client:
                 client_socket.sendall(f"{remote_filename}\0".encode())  # ... <remote_filename>
 
                 # RECEIVE RESPONSE FROM CLIENT
-                response = client_socket.recv(EXECUTION_STATUS_SIZE)  # Execution status
+                response = client_socket.recv(EXECUTION_STATUS_SIZE).decode()  # Execution status
 
                 # CHECK RESPONSE FROM CLIENT
                 if response == '0':
