@@ -962,11 +962,23 @@ int list_users(int client_socket) {
     // send userlist to client
     for (int i = 0; i < usernum; i++) {
         sleep(0.1);
-        write(client_socket, userlist[i].username, USERNAME_SIZE);
+        if (write(client_socket, userlist[i].username, USERNAME_SIZE) < 0) {
+            perror("write");
+            pthread_mutex_unlock(&connected_file_lock);
+            return -1;
+        }
         sleep(0.1);
-        write(client_socket, userlist[i].ip, IP_ADDRESS_SIZE);
+        if (write(client_socket, userlist[i].ip, IP_ADDRESS_SIZE) < 0) {
+            perror("write");
+            pthread_mutex_unlock(&connected_file_lock);
+            return -1;
+        }
         sleep(0.1);
-        write(client_socket, userlist[i].port, PORT_SIZE);
+        if (write(client_socket, userlist[i].port, PORT_SIZE) < 0) {
+            perror("write");
+            pthread_mutex_unlock(&connected_file_lock);
+            return -1;
+        }
     }
 
     fclose(connected_file);
@@ -1067,9 +1079,6 @@ int list_content(int client_socket) {
         filenum++;
     }
 
-    fclose(username_file);
-    pthread_mutex_unlock(&files_folder_lock);
-
     // send filenum to client
     char *filenum_str;
     asprintf(&filenum_str, "%d", filenum);
@@ -1079,10 +1088,21 @@ int list_content(int client_socket) {
     // send filelist to client
     for (int i = 0; i < filenum; i++) {
         sleep(0.1);
-        write(client_socket, filelist[i].filename, FILENAME_SIZE);
+        if (write(client_socket, filelist[i].filename, FILENAME_SIZE) < 0) {
+            perror("write");
+            pthread_mutex_unlock(&files_folder_lock);
+            return -1;
+        }
         sleep(0.1);
-        write(client_socket, filelist[i].description, DESCRIPTION_SIZE);
+        if (write(client_socket, filelist[i].description, DESCRIPTION_SIZE) < 0) {
+            perror("write");
+            pthread_mutex_unlock(&files_folder_lock);
+            return -1;
+        }
     }
+
+    fclose(username_file);
+    pthread_mutex_unlock(&files_folder_lock);
 
     // send info to RPC server
     int rpc_server_result;
